@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,10 +13,23 @@ export async function GET(req: NextRequest) {
     orderBy: { updatedAt: 'desc' },
   });
   if (!design) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  let storedDocument: unknown;
+  try {
+    storedDocument = JSON.parse(design.document);
+  } catch {
+    return NextResponse.json({ error: 'stored design document is invalid JSON' }, { status: 500 });
+  }
+  const parsedDocument = SceneDocumentSchema.safeParse(storedDocument);
+  if (!parsedDocument.success) {
+    return NextResponse.json({
+      error: 'stored design document is invalid',
+      issues: formatSceneIssues(parsedDocument.error),
+    }, { status: 500 });
+  }
   return NextResponse.json({
     id: design.id,
     version: design.version,
-    document: JSON.parse(design.document),
+    document: parsedDocument.data,
   });
 }
 
@@ -33,6 +47,13 @@ export async function PUT(req: Request) {
   if (typeof projectId !== 'string' || !projectId || !document || !Number.isSafeInteger(version) || version < 1) {
     return NextResponse.json({ error: 'projectId / document / version required' }, { status: 400 });
   }
+  const parsedDocument = SceneDocumentSchema.safeParse(document);
+  if (!parsedDocument.success) {
+    return NextResponse.json({
+      error: 'invalid scene document',
+      issues: formatSceneIssues(parsedDocument.error),
+    }, { status: 400 });
+  }
   const latest = await prisma.design.findFirst({
     where: { projectId },
     orderBy: { updatedAt: 'desc' },
@@ -42,7 +63,7 @@ export async function PUT(req: Request) {
   const saved = await prisma.$transaction(async (tx) => {
     const result = await tx.design.updateMany({
       where: { id: latest.id, version },
-      data: { document: JSON.stringify(document), version: { increment: 1 } },
+      data: { document: JSON.stringify(parsedDocument.data), version: { increment: 1 } },
     });
     if (!result.count) return false;
     await tx.project.update({ where: { id: projectId }, data: { updatedAt: new Date() } });

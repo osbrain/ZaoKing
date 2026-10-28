@@ -18,10 +18,10 @@ import {
 import { pointInPoly, polyArea, solvePlacement } from './geometry';
 
 export type DesignOp =
-  | { op: 'add_component'; room?: string; query: string }
-  | { op: 'replace_component'; room?: string; target: string; spec?: string }
-  | { op: 'delete_component'; room?: string; target: string }
-  | { op: 'set_floor_material'; room?: string; query: string }
+  | { op: 'add_component'; levelId?: string; room?: string; query: string }
+  | { op: 'replace_component'; levelId?: string; room?: string; target: string; spec?: string }
+  | { op: 'delete_component'; levelId?: string; room?: string; target: string }
+  | { op: 'set_floor_material'; levelId?: string; room?: string; query: string }
   | { op: 'ask_user'; question: string };
 
 export interface OpOutcome {
@@ -73,11 +73,21 @@ function matchInstance(level: Level, room: Room, target: string) {
 /* ---------- 执行器 ---------- */
 
 export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
-  const level = doc.levels[0];
   const cmds: Cmd[] = [];
   const log: string[] = [];
 
   for (const op of ops) {
+    if (op.op === 'ask_user') {
+      log.push(`💬 ${op.question}`);
+      continue;
+    }
+    const level = op.levelId
+      ? doc.levels.find((candidate) => candidate.id === op.levelId)
+      : doc.levels.length === 1 ? doc.levels[0] : undefined;
+    if (!level) {
+      log.push(op.levelId ? `⚠ 未找到楼层「${op.levelId}」` : '💬 请先指定要修改的楼层');
+      continue;
+    }
     switch (op.op) {
       case 'add_component': {
         const room = resolveRoom(level, op.room);
@@ -87,6 +97,7 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         const p = solvePlacement(level, room, asset);
         if (!p) { log.push(`⚠「${room.name}」里没有足够的空位放置「${asset.name}」`); break; }
         cmds.push({
+          levelId: level.id,
           type: 'place',
           inst: { id: uid(), assetId: asset.id, t: p, size: { w: asset.w, d: asset.d } },
         });
@@ -109,7 +120,7 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
           next = resolveAssetByQuery(op.spec);
         }
         if (!next || next.id === cur.id) { log.push(`⚠ 没有满足「${op.spec ?? op.target}」的替换规格`); break; }
-        cmds.push({ type: 'replaceAsset', id: inst.id, assetId: next.id });
+        cmds.push({ levelId: level.id, type: 'replaceAsset', id: inst.id, assetId: next.id });
         log.push(`✓ 已将${room.name}的「${cur.name}」换成「${next.name}」（位置朝向保留）`);
         break;
       }
@@ -119,7 +130,7 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         const inst = matchInstance(level, room, op.target);
         if (!inst) { log.push(`⚠「${room.name}」里没有找到「${op.target}」`); break; }
         const a = assetById(inst.assetId)!;
-        cmds.push({ type: 'delete', id: inst.id });
+        cmds.push({ levelId: level.id, type: 'delete', id: inst.id });
         log.push(`✓ 已删除${room.name}的「${a.name}」`);
         break;
       }
@@ -128,13 +139,10 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         if (!room) { log.push(`⚠ 未找到房间「${op.room ?? ''}」`); break; }
         const mat = resolveMaterialByQuery(op.query);
         if (!mat) { log.push(`⚠ 材质库中没有匹配「${op.query}」的材质`); break; }
-        cmds.push({ type: 'setRoomMaterial', roomId: room.id, materialId: mat.id });
+        cmds.push({ levelId: level.id, type: 'setRoomMaterial', roomId: room.id, materialId: mat.id });
         log.push(`✓ 已将${room.name}的地面换为「${mat.name}」（¥${mat.price}/m²）`);
         break;
       }
-      case 'ask_user':
-        log.push(`💬 ${op.question}`);
-        break;
     }
   }
   return { cmds, log };

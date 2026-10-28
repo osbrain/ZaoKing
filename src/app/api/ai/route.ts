@@ -8,7 +8,9 @@ import type { DesignOp } from '@/core/ops';
 import { parseAiToolCalls } from '@/core/aiTools';
 import { CATALOG, MATERIALS } from '@/core/assets';
 import { pointInPoly } from '@/core/geometry';
+import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 import type { SceneDocument } from '@/core/types';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +21,14 @@ function packContext(doc: SceneDocument): string {
   const lv = doc?.levels?.[0];
   if (!lv) return '（空文档）';
   const lines: string[] = [];
-  for (const r of lv.rooms) {
-    const names = lv.instances
-      .filter((i) => pointInPoly([i.t.x, i.t.y], r.poly))
-      .map((i) => CATALOG.find((a) => a.id === i.assetId)?.name ?? i.assetId);
-    lines.push(`- ${r.name}${r.counted === false ? '（飘窗，不计面积）' : ''}：${names.length ? names.join('、') : '空'}`);
+  for (const level of doc.levels) {
+    lines.push(`【楼层 ${level.name}，levelId=${level.id}】`);
+    for (const r of level.rooms) {
+      const names = level.instances
+        .filter((i) => pointInPoly([i.t.x, i.t.y], r.poly))
+        .map((i) => CATALOG.find((a) => a.id === i.assetId)?.name ?? i.assetId);
+      lines.push(`- ${r.name}${r.counted === false ? '（飘窗，不计面积）' : ''}：${names.length ? names.join('、') : '空'}`);
+    }
   }
   const cats = [...new Set(CATALOG.map((a) => a.category))]
     .map((cat) => {
@@ -37,7 +42,7 @@ function packContext(doc: SceneDocument): string {
 const SYSTEM_PROMPT = `你是 ZaoKing 室内设计助手，通过调用工具函数操作用户的户型场景。
 规则：
 1. 绝不虚构坐标、尺寸或 id —— 几何摆放由系统求解，你只描述意图。
-2. room 参数必须是【房间与现有布置】中出现过的房间名；query/target/spec 使用组件库中的名称关键词。
+2. 多层方案必须通过 levelId 选择楼层；room 参数必须是该楼层中出现过的房间名。query/target/spec 使用组件库中的名称关键词。
 3. 用户一句话包含多个意图时，并行调用多个工具。
 4. 信息不足或有歧义时，调用 ask_user 向用户提问（给选项）。
 5. 工具调用完成后简短总结你做了什么；不要编造未执行的操作。`;
@@ -52,6 +57,7 @@ const TOOLS = [
         type: 'object',
         properties: {
           room: { type: 'string', description: '房间名，如"客厅"，缺省为最大房间' },
+          levelId: { type: 'string', description: '目标楼层 ID；多层项目必填' },
           query: { type: 'string', description: '组件名称关键词，如"三人沙发"' },
         },
         required: ['query'],
@@ -67,6 +73,7 @@ const TOOLS = [
         type: 'object',
         properties: {
           room: { type: 'string' },
+          levelId: { type: 'string' },
           target: { type: 'string', description: '被替换的现有组件，如"床"' },
           spec: { type: 'string', description: '目标规格或名称，如"1.8米"、"双人沙发"' },
         },
@@ -81,7 +88,7 @@ const TOOLS = [
       description: '删除房间里指定的组件',
       parameters: {
         type: 'object',
-        properties: { room: { type: 'string' }, target: { type: 'string' } },
+        properties: { room: { type: 'string' }, levelId: { type: 'string' }, target: { type: 'string' } },
         required: ['target'],
       },
     },
@@ -93,7 +100,7 @@ const TOOLS = [
       description: '更换房间地面材质',
       parameters: {
         type: 'object',
-        properties: { room: { type: 'string' }, query: { type: 'string', description: '材质名或颜色描述，如"浅灰色地砖"' } },
+        properties: { room: { type: 'string' }, levelId: { type: 'string' }, query: { type: 'string', description: '材质名或颜色描述，如"浅灰色地砖"' } },
         required: ['query'],
       },
     },
@@ -207,12 +214,26 @@ function withRules(message: string): Response {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, doc, history } = await req.json();
-    if (!message || !doc) return NextResponse.json({ error: 'message / doc required' }, { status: 400 });
+    const requestSchema = z.object({
+      message: z.string().trim().min(1).max(2000),
+      doc: SceneDocumentSchema,
+      history: z.array(z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().max(2000),
+      }).strict()).max(16).optional(),
+    }).strict();
+    const request = requestSchema.safeParse(await req.json());
+    if (!request.success) {
+      return NextResponse.json({
+        error: 'invalid AI request',
+        issues: formatSceneIssues(request.error),
+      }, { status: 400 });
+    }
+    const { message, doc, history = [] } = request.data;
     const key = process.env.OPENAI_API_KEY;
     if (key) {
       try {
-        return await withLLM(key, message, doc, history ?? []);
+        return await withLLM(key, message, doc, history);
       } catch (e) {
         console.error('[ai] LLM 调用失败，回退规则模式:', e);
       }

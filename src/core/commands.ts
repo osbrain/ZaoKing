@@ -7,31 +7,37 @@
 import type { ComponentInstance, Opening, Room, SceneDocument, Wall } from './types';
 
 export type Cmd =
-  | { type: 'place'; inst: ComponentInstance }
-  | { type: 'delete'; id: string }
-  | { type: 'move'; id: string; t: { x: number; y: number; rot: number } }
-  | { type: 'resize'; id: string; size: { w: number; d: number } }
-  | { type: 'setColor'; id: string; color: string }
-  | { type: 'replaceAsset'; id: string; assetId: string }
-  | { type: 'setRoomMaterial'; roomId: string; materialId: string }
-  | { type: 'setRoomName'; roomId: string; name: string }
+  | { levelId?: string; type: 'place'; inst: ComponentInstance }
+  | { levelId?: string; type: 'delete'; id: string }
+  | { levelId?: string; type: 'move'; id: string; t: { x: number; y: number; rot: number } }
+  | { levelId?: string; type: 'resize'; id: string; size: { w: number; d: number } }
+  | { levelId?: string; type: 'setColor'; id: string; color: string }
+  | { levelId?: string; type: 'replaceAsset'; id: string; assetId: string }
+  | { levelId?: string; type: 'setRoomMaterial'; roomId: string; materialId: string }
+  | { levelId?: string; type: 'setRoomName'; roomId: string; name: string }
   /* ---- 户型编辑：墙体 ---- */
-  | { type: 'addWall'; wall: Wall }
-  | { type: 'deleteWall'; id: string }
-  | { type: 'setWall'; id: string; rect?: [number, number, number, number]; kind?: Wall['kind']; height?: number }
+  | { levelId?: string; type: 'addWall'; wall: Wall }
+  | { levelId?: string; type: 'deleteWall'; id: string }
+  | { levelId?: string; type: 'setWall'; id: string; rect?: [number, number, number, number]; kind?: Wall['kind']; height?: number }
   /* ---- 户型编辑：房间地面 ---- */
-  | { type: 'addRoom'; room: Room }
-  | { type: 'deleteRoom'; id: string }
+  | { levelId?: string; type: 'addRoom'; room: Room }
+  | { levelId?: string; type: 'deleteRoom'; id: string }
   /* ---- 户型编辑：门窗 ---- */
-  | { type: 'addOpening'; opening: Opening }
-  | { type: 'deleteOpening'; id: string }
-  | { type: 'setOpening'; id: string; rect?: [number, number, number, number]; height?: number; sill?: number };
+  | { levelId?: string; type: 'addOpening'; opening: Opening }
+  | { levelId?: string; type: 'deleteOpening'; id: string }
+  | { levelId?: string; type: 'setOpening'; id: string; rect?: [number, number, number, number]; height?: number; sill?: number };
 
 export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
   if (!cmds.length) return doc;
+  if (doc.levels.length > 1 && cmds.some((command) => !command.levelId)) {
+    throw new Error('Commands must target a level when the document has multiple levels');
+  }
+  const unknownLevel = cmds.find((command) => command.levelId && !doc.levels.some((level) => level.id === command.levelId));
+  if (unknownLevel) throw new Error(`Unknown level: ${unknownLevel.levelId}`);
   const d: SceneDocument = structuredClone(doc);
   for (const lv of d.levels) {
     for (const c of cmds) {
+      if (c.levelId && c.levelId !== lv.id) continue;
       switch (c.type) {
         case 'place':
           lv.instances.push(structuredClone(c.inst));

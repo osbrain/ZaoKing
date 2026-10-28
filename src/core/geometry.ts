@@ -15,6 +15,49 @@ export const polyArea = (poly: Vec2[]): number =>
     }, 0),
   ) / 2 / 1e6; // m²
 
+function cross(a: Vec2, b: Vec2, c: Vec2) {
+  return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+}
+
+function onSegment(a: Vec2, b: Vec2, p: Vec2, areaEpsilon: number, coordEpsilon: number) {
+  return Math.abs(cross(a, b, p)) <= areaEpsilon &&
+    p[0] >= Math.min(a[0], b[0]) - coordEpsilon && p[0] <= Math.max(a[0], b[0]) + coordEpsilon &&
+    p[1] >= Math.min(a[1], b[1]) - coordEpsilon && p[1] <= Math.max(a[1], b[1]) + coordEpsilon;
+}
+
+function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2) {
+  const areaEpsilon = 1e-7;
+  const coordEpsilon = 1e-7;
+  const abC = cross(a, b, c), abD = cross(a, b, d);
+  const cdA = cross(c, d, a), cdB = cross(c, d, b);
+  const crosses = (x: number, y: number) =>
+    (x > areaEpsilon && y < -areaEpsilon) || (x < -areaEpsilon && y > areaEpsilon);
+  return (crosses(abC, abD) && crosses(cdA, cdB)) ||
+    onSegment(a, b, c, areaEpsilon, coordEpsilon) || onSegment(a, b, d, areaEpsilon, coordEpsilon) ||
+    onSegment(c, d, a, areaEpsilon, coordEpsilon) || onSegment(c, d, b, areaEpsilon, coordEpsilon);
+}
+
+/** A valid simple polygon has area and no non-adjacent edges that touch or cross. */
+export function isSimplePolygon(poly: readonly Vec2[]) {
+  if (poly.length < 3 || new Set(poly.map(([x, y]) => `${x},${y}`)).size < 3) return false;
+  let twiceArea = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    if (a[0] === b[0] && a[1] === b[1]) return false;
+    twiceArea += a[0] * b[1] - b[0] * a[1];
+  }
+  if (!Number.isFinite(twiceArea) || Math.abs(twiceArea) < 1e-7) return false;
+
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    for (let j = i + 1; j < poly.length; j++) {
+      if (j === i || j === (i + 1) % poly.length || (j + 1) % poly.length === i) continue;
+      if (segmentsIntersect(a, b, poly[j], poly[(j + 1) % poly.length])) return false;
+    }
+  }
+  return true;
+}
+
 export const polyBBox = (poly: Vec2[]) => {
   const xs = poly.map((p) => p[0]);
   const ys = poly.map((p) => p[1]);
