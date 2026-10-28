@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { DesignOp } from '@/core/ops';
 import { parseAiToolCalls } from '@/core/aiTools';
-import { CATALOG, MATERIALS } from '@/core/assets';
+import { assetCatalog, MATERIALS } from '@/core/assets';
 import { pointInPoly } from '@/core/geometry';
 import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 import type { SceneDocument } from '@/core/types';
@@ -18,6 +18,7 @@ export const dynamic = 'force-dynamic';
 /* ---------- 场景上下文包（控制 token，只传摘要不传坐标） ---------- */
 
 function packContext(doc: SceneDocument): string {
+  const catalog = assetCatalog(doc.assets);
   const lv = doc?.levels?.[0];
   if (!lv) return '（空文档）';
   const lines: string[] = [];
@@ -26,13 +27,13 @@ function packContext(doc: SceneDocument): string {
     for (const r of level.rooms) {
       const names = level.instances
         .filter((i) => pointInPoly([i.t.x, i.t.y], r.poly))
-        .map((i) => CATALOG.find((a) => a.id === i.assetId)?.name ?? i.assetId);
+        .map((i) => catalog.find((a) => a.id === i.assetId)?.name ?? i.assetId);
       lines.push(`- ${r.name}${r.counted === false ? '（飘窗，不计面积）' : ''}：${names.length ? names.join('、') : '空'}`);
     }
   }
-  const cats = [...new Set(CATALOG.map((a) => a.category))]
+  const cats = [...new Set(catalog.map((a) => a.category))]
     .map((cat) => {
-      const names = CATALOG.filter((a) => a.category === cat).map((a) => a.name);
+      const names = catalog.filter((a) => a.category === cat).map((a) => a.name);
       return `  · ${cat}：${names.join('、')}`;
     })
     .join('\n');

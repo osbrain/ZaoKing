@@ -10,7 +10,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { assetById } from '@/core/assets';
-import { instanceRef, type ComponentInstance, type Level, type Opening, type Room } from '@/core/types';
+import { instanceRef, type Asset, type ComponentInstance, type Level, type Opening, type Room } from '@/core/types';
 import { docBBox } from '@/core/geometry';
 import { buildWallSolids } from '@/core/wallGeometry';
 import { createModelFactory, disposeModelGeometry } from './modelFactory';
@@ -132,19 +132,19 @@ function RoomFloor({ room, models, cutHeight }: { room: Room; models: ModelFacto
   );
 }
 
-function Furniture({ inst, models }: { inst: ComponentInstance; models: ModelFactory }) {
+function Furniture({ inst, models, asset }: { inst: ComponentInstance; models: ModelFactory; asset?: Asset }) {
   const select = useEditorStore(s => s.select);
   const selected = useEditorStore(s => s.selection?.kind === 'furn' && s.selection.id === inst.id);
-  const ref = instanceRef(inst, assetById(inst.assetId));
+  const ref = instanceRef(inst, asset);
   const object = useMemo(() => {
     const model = models.buildFurniture({
-      id: inst.id, type: ref.type, w: Math.max(100, ref.w), d: Math.max(100, ref.d),
+      id: inst.id, type: ref.type, w: Math.max(10, ref.w), d: Math.max(10, ref.d), h: ref.h, shape: asset?.geometry?.shape,
       color: ref.color, cx: 6000, cy: 5300, rot: 0,
     }) as THREE.Group;
     // Source models place themselves relative to the static prototype's origin.
     model.position.set(0, 0, 0);
     return model;
-  }, [models, inst.id, ref.type, ref.w, ref.d, ref.color]);
+  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, asset?.geometry?.shape]);
   useEffect(() => () => disposeModelGeometry(object), [object]);
   return (
     <group position={[inst.t.x / 1000, 0.015, -inst.t.y / 1000]} rotation={[0, inst.t.rot * Math.PI / 180, 0]}
@@ -244,7 +244,7 @@ function Lighting({ level, hour }: { level: Level; hour: number }) {
   </>;
 }
 
-function DetailedScene({ level, cutHeight, labels, hour }: { level: Level; cutHeight: number; labels: boolean; hour: number }) {
+function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Level; assets?: readonly Asset[]; cutHeight: number; labels: boolean; hour: number }) {
   const { gl, scene } = useThree();
   const [models, setModels] = useState<ModelFactory | null>(null);
   useEffect(() => {
@@ -268,7 +268,7 @@ function DetailedScene({ level, cutHeight, labels, hour }: { level: Level; cutHe
     </mesh>
     {models && <>
       {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} />)}
-      {level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} />)}
+      {level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} asset={assetById(inst.assetId, assets)} />)}
     </>}
     <Architecture level={level} cutHeight={cutHeight} />
     {labels && <RoomLabels level={level} />}
@@ -293,7 +293,7 @@ export default function Scene3D() {
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
-        <DetailedScene level={level} cutHeight={cutHeight} labels={labels} hour={hour} />
+        <DetailedScene assets={doc?.assets} level={level} cutHeight={cutHeight} labels={labels} hour={hour} />
       </Canvas>
       <div className="absolute right-3 top-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-1 rounded-xl border border-stone-200 bg-white/95 p-1 shadow-sm backdrop-blur-sm">
         <button className={button} onClick={() => setPreset3d('iso')}>鸟瞰</button>

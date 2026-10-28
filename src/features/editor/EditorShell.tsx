@@ -48,6 +48,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [loadedProject, setLoadedProject] = useState<string | null>(null);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const [mobileLibraryOpen, setMobileLibraryOpen] = useState(false);
   const autosaverRef = useRef<ReturnType<typeof createAutosaver> | null>(null);
 
   /* 加载文档 */
@@ -108,7 +109,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       const scene = useSceneStore.getState();
       const ed = useEditorStore.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -269,6 +270,15 @@ export default function EditorShell({ projectId }: { projectId: string }) {
         </aside>
       </div>
 
+      {mobileLibraryOpen && <>
+        <button aria-label="关闭组件库" onClick={() => setMobileLibraryOpen(false)} className="fixed inset-x-0 top-12 bottom-7 z-30 bg-black/20 md:hidden" />
+        <aside className="fixed bottom-7 left-0 top-12 z-40 flex w-[min(88vw,288px)] flex-col border-r border-zinc-200 bg-white shadow-xl md:hidden">
+          <button onClick={() => setMobileLibraryOpen(false)} className="border-b border-zinc-100 px-3 py-2 text-right text-xs text-zinc-500">收起组件库 ×</button>
+          <div className="min-h-0 flex-1"><AssetLibrary /></div>
+        </aside>
+      </>}
+      {!mobileLibraryOpen && <button onClick={() => { setMobileLibraryOpen(true); setMobilePanelOpen(false); }} className="fixed bottom-10 left-3 z-20 rounded-md border border-zinc-200 bg-white/95 px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm md:hidden">组件库</button>}
+
       {mobilePanelOpen && <button aria-label="关闭属性面板" onClick={() => setMobilePanelOpen(false)} className="fixed inset-x-0 top-12 bottom-7 z-30 bg-black/20 md:hidden" />}
       <aside className={`fixed bottom-7 right-0 top-12 z-40 flex w-[min(88vw,320px)] flex-col border-l border-zinc-200 bg-white shadow-xl transition-transform md:hidden ${mobilePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex shrink-0 border-b border-zinc-200">
@@ -285,7 +295,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           {rightTab === 'stats' && <StatsPanel />}
         </div>
       </aside>
-      {!mobilePanelOpen && <button aria-label="打开属性面板" title="打开属性面板" onClick={() => setMobilePanelOpen(true)} className="fixed bottom-10 right-3 z-20 rounded-md border border-zinc-200 bg-white/95 px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm md:hidden">面板</button>}
+      {!mobilePanelOpen && <button aria-label="打开属性面板" title="打开属性面板" onClick={() => { setMobilePanelOpen(true); setMobileLibraryOpen(false); }} className="fixed bottom-10 right-3 z-20 rounded-md border border-zinc-200 bg-white/95 px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm md:hidden">面板</button>}
 
       {/* 状态栏 */}
       <footer className="flex h-7 shrink-0 items-center gap-5 border-t border-zinc-200 bg-white px-3 text-[11px] text-zinc-500">

@@ -9,7 +9,7 @@ import type { Cmd } from './commands';
 import type { Level, Room, SceneDocument } from './types';
 import { uid } from './types';
 import {
-  CATALOG,
+  assetCatalog,
   assetById,
   parseWidthMm,
   resolveAssetByQuery,
@@ -58,11 +58,11 @@ export function resolveRoom(level: Level, name?: string): Room | null {
   );
 }
 
-function matchInstance(level: Level, room: Room, target: string) {
+function matchInstance(level: Level, room: Room, target: string, assets: SceneDocument['assets']) {
   const q = norm(target);
   return level.instances.find((i) => {
     if (!pointInPoly([i.t.x, i.t.y], room.poly)) return false;
-    const a = assetById(i.assetId);
+    const a = assetById(i.assetId, assets);
     if (!a) return false;
     const name = norm(a.name);
     const type = norm(a.type);
@@ -92,9 +92,9 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
       case 'add_component': {
         const room = resolveRoom(level, op.room);
         if (!room) { log.push(`⚠ 未找到房间「${op.room ?? ''}」`); break; }
-        const asset = resolveAssetByQuery(op.query);
+        const asset = resolveAssetByQuery(op.query, doc.assets);
         if (!asset) { log.push(`⚠ 组件库中没有找到「${op.query}」`); break; }
-        const p = solvePlacement(level, room, asset);
+        const p = solvePlacement(level, room, asset, { assets: doc.assets });
         if (!p) { log.push(`⚠「${room.name}」里没有足够的空位放置「${asset.name}」`); break; }
         cmds.push({
           levelId: level.id,
@@ -107,17 +107,17 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
       case 'replace_component': {
         const room = resolveRoom(level, op.room);
         if (!room) { log.push(`⚠ 未找到房间「${op.room ?? ''}」`); break; }
-        const inst = matchInstance(level, room, op.target);
+        const inst = matchInstance(level, room, op.target, doc.assets);
         if (!inst) { log.push(`⚠「${room.name}」里没有找到「${op.target}」`); break; }
-        const cur = assetById(inst.assetId)!;
+        const cur = assetById(inst.assetId, doc.assets)!;
         let next = null;
         const w = op.spec ? parseWidthMm(op.spec) : null;
         if (w) {
           // 同类型按目标宽度就近选规格（"1.8米的床" → 双人床 1.8m）
-          next = CATALOG.filter((a) => a.type === cur.type)
+          next = assetCatalog(doc.assets).filter((a) => a.type === cur.type)
             .sort((a, b) => Math.abs(a.w - w) - Math.abs(b.w - w))[0] ?? null;
         } else if (op.spec) {
-          next = resolveAssetByQuery(op.spec);
+          next = resolveAssetByQuery(op.spec, doc.assets);
         }
         if (!next || next.id === cur.id) { log.push(`⚠ 没有满足「${op.spec ?? op.target}」的替换规格`); break; }
         cmds.push({ levelId: level.id, type: 'replaceAsset', id: inst.id, assetId: next.id });
@@ -127,9 +127,9 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
       case 'delete_component': {
         const room = resolveRoom(level, op.room);
         if (!room) { log.push(`⚠ 未找到房间「${op.room ?? ''}」`); break; }
-        const inst = matchInstance(level, room, op.target);
+        const inst = matchInstance(level, room, op.target, doc.assets);
         if (!inst) { log.push(`⚠「${room.name}」里没有找到「${op.target}」`); break; }
-        const a = assetById(inst.assetId)!;
+        const a = assetById(inst.assetId, doc.assets)!;
         cmds.push({ levelId: level.id, type: 'delete', id: inst.id });
         log.push(`✓ 已删除${room.name}的「${a.name}」`);
         break;

@@ -78,8 +78,8 @@ export const roomOfPoint = (level: Level, p: Vec2): Room | undefined =>
   level.rooms.find((r) => pointInPoly(p, r.poly));
 
 /** 旋转后的轴对齐包围盒半宽 */
-export function instAABB(inst: ComponentInstance): { hw: number; hh: number } {
-  const { w, d } = instanceRef(inst, assetById(inst.assetId));
+export function instAABB(inst: ComponentInstance, assets: readonly Asset[] = []): { hw: number; hh: number } {
+  const { w, d } = instanceRef(inst, assetById(inst.assetId, assets));
   const a = (inst.t.rot * Math.PI) / 180;
   const c = Math.abs(Math.cos(a));
   const s = Math.abs(Math.sin(a));
@@ -139,6 +139,8 @@ export interface Placement {
 }
 
 export interface SolveOptions {
+  /** 当前项目的声明式组件目录。 */
+  assets?: readonly Asset[];
   /** 离其他家具的最小净距 mm */
   clearance?: number;
   /** 贴墙间隙 mm */
@@ -163,7 +165,7 @@ export function solvePlacement(
   const { w, d } = asset;
   const obstacles = level.instances
     .map((inst) => {
-      const { hw, hh } = instAABB(inst);
+      const { hw, hh } = instAABB(inst, opts.assets);
       return { x: inst.t.x, y: inst.t.y, hw, hh };
     });
 

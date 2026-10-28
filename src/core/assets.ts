@@ -84,8 +84,13 @@ function buildCatalog(): Asset[] {
 
 export const CATALOG: Asset[] = buildCatalog();
 
-export const assetById = (id: string): Asset | undefined =>
-  CATALOG.find((a) => a.id === id);
+const BUILTIN_ASSETS = new Map(CATALOG.map((asset) => [asset.id, asset]));
+
+export const assetById = (id: string, projectAssets: readonly Asset[] = []): Asset | undefined =>
+  BUILTIN_ASSETS.get(id) ?? projectAssets.find((asset) => asset.id === id);
+
+export const assetCatalog = (projectAssets: readonly Asset[] = []): Asset[] =>
+  [...CATALOG, ...projectAssets];
 
 export const CATEGORIES = RAW_LIB.map((g) => g.cat);
 
@@ -110,20 +115,20 @@ export function resolveAsset(
 }
 
 /** AI / 搜索用：按自然语言查询解析资产（名称包含 > 标签 > 类型） */
-export function resolveAssetByQuery(query: string): Asset | null {
-  const q = query.trim();
+export function resolveAssetByQuery(query: string, projectAssets: readonly Asset[] = []): Asset | null {
+  const q = query.trim().toLowerCase();
   if (!q) return null;
   const norm = q.replace(/\s+/g, '');
   let best: Asset | null = null;
   let bestScore = 0;
-  for (const a of CATALOG) {
-    const name = a.name.replace(/\s+/g, '');
+  for (const a of assetCatalog(projectAssets)) {
+    const name = a.name.replace(/\s+/g, '').toLowerCase();
     let s = 0;
     if (name === norm) s = 10;
     else if (name.includes(norm) || norm.includes(name)) s = 8;
     else {
       for (const tag of a.tags) {
-        const t = tag.replace(/\s+/g, '');
+        const t = tag.replace(/\s+/g, '').toLowerCase();
         if (t && (t.includes(norm) || norm.includes(t))) s = Math.max(s, t.length >= 2 ? 5 : 3);
       }
     }

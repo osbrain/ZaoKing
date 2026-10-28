@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { isSimplePolygon } from './geometry';
+import { CustomAssetSchema } from './assetSchema';
+import { assetById } from './assets';
 
 const MAX_COORDINATE_MM = 1_000_000;
 const coordinate = z.number().finite().min(-MAX_COORDINATE_MM).max(MAX_COORDINATE_MM);
@@ -65,7 +67,8 @@ const componentInstanceSchema = z.object({
   id: identifier,
   assetId: identifier,
   t: z.object({ x: coordinate, y: coordinate, rot: z.number().finite() }).strict(),
-  size: z.object({ w: positiveMeasure, d: positiveMeasure }).strict().optional(),
+  size: z.object({ w: positiveMeasure.optional(), d: positiveMeasure.optional(), h: positiveMeasure.optional() }).strict()
+    .refine((size) => size.w !== undefined || size.d !== undefined || size.h !== undefined, 'At least one size override is required').optional(),
   color: z.string().trim().min(1).max(64).optional(),
   locked: z.boolean().optional(),
 }).strict();
@@ -94,13 +97,26 @@ export const SceneDocumentSchema = z.object({
   schemaVersion: z.literal(1),
   meta: z.object({ name: z.string().trim().min(1).max(200), units: z.literal('mm') }).strict(),
   levels: z.array(levelSchema).min(1).max(100),
+  assets: z.array(CustomAssetSchema).max(1000).optional(),
 }).strict().superRefine((document, ctx) => {
+  const assetIds = new Set<string>();
+  document.assets?.forEach((asset, index) => {
+    if (assetIds.has(asset.id)) {
+      ctx.addIssue({ path: ['assets', index, 'id'], code: z.ZodIssueCode.custom, message: 'Asset IDs must be unique' });
+    }
+    assetIds.add(asset.id);
+  });
   const ids = new Set<string>();
   document.levels.forEach((level, index) => {
     if (ids.has(level.id)) {
       ctx.addIssue({ path: ['levels', index, 'id'], code: z.ZodIssueCode.custom, message: 'Level IDs must be unique' });
     }
     ids.add(level.id);
+    level.instances.forEach((instance, instanceIndex) => {
+      if (!assetById(instance.assetId, document.assets)) {
+        ctx.addIssue({ path: ['levels', index, 'instances', instanceIndex, 'assetId'], code: z.ZodIssueCode.custom, message: 'Component asset does not exist in this document or the built-in catalog' });
+      }
+    });
   });
 });
 

@@ -5,7 +5,7 @@
  * 生产环境中资产将携带 plan2d 矢量符号或俯视投影图，此处为官方内置符号。
  * ============================================================ */
 
-import type { Level } from './types';
+import type { Asset, Level } from './types';
 
 /* ---------- 基础工具 ---------- */
 
@@ -65,11 +65,17 @@ export function patternsDefs(): string {
 
 /* ---------- 家具平面图例（原型 furnSVG 全量移植） ---------- */
 
-export function furnSVG(t: string, w: number, d: number, c: string): string {
+export function furnSVG(t: string, w: number, d: number, c: string, geometry?: Asset['geometry']): string {
+  // SVG attributes never accept arbitrary strings from a saved document.
+  c = /^#[0-9a-fA-F]{6}$/.test(c) ? c : '#e5e0d5';
   const x = -w / 2;
   const y = -d / 2;
   const m = Math.min(w, d);
   switch (t) {
+    case 'custom':
+      return geometry?.shape === 'cylinder'
+        ? `<ellipse cx="0" cy="0" rx="${w / 2}" ry="${d / 2}" fill="${c}" ${ST}/>`
+        : rc(x, y, w, d, c);
     case 'bed': {
       let s = rc(x, y, w, d, '#fbf8f2', 'rx="30"') + rc(x, y, w, Math.min(90, d * 0.05), shade(c, 0.62), 'rx="20"');
       const ph = Math.min(360, d * 0.18);

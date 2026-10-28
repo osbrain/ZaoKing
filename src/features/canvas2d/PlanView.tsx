@@ -11,7 +11,7 @@ import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore, type Selection, type Tool, type WallPreset } from '@/stores/editorStore';
 import type { Cmd } from '@/core/commands';
 import { assetById, materialById } from '@/core/assets';
-import { instanceRef, uid, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
+import { instanceRef, uid, type Asset, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
 import { docBBox, polyArea } from '@/core/geometry';
 import { dimsSvg, furnSVG, openingsSvg, patternsDefs } from '@/core/symbols2d';
 
@@ -469,7 +469,7 @@ export default function PlanView() {
         <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting} />
         <g dangerouslySetInnerHTML={{ __html: openingsSvg(level) }} pointerEvents="none" />
         <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting} />
-        <FurnLayer level={level} drag={drag} onDown={startDrag} interactive={selecting} />
+        <FurnLayer assets={doc?.assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />
         <LabelsLayer level={level} />
         <g dangerouslySetInnerHTML={{ __html: dimsSvg() }} pointerEvents="none" />
         {/* 绘制预览 */}
@@ -502,7 +502,7 @@ export default function PlanView() {
             fill="rgba(79,115,148,.4)" stroke="#4f7394" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" pointerEvents="none"
           />
         )}
-        <SelLayer level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
+        <SelLayer assets={doc?.assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
       </svg>
 
       {/* 工具条 */}
@@ -690,11 +690,13 @@ const OpeningOverlay = React.memo(function OpeningOverlay({
 });
 
 const FurnLayer = React.memo(function FurnLayer({
+  assets,
   level,
   drag,
   onDown,
   interactive,
 }: {
+  assets?: readonly Asset[];
   level: Level;
   drag: DragState | null;
   onDown: (inst: ComponentInstance, e: React.PointerEvent) => void;
@@ -703,13 +705,9 @@ const FurnLayer = React.memo(function FurnLayer({
   return (
     <g>
       {level.instances.map((inst) => {
-        const asset = assetById(inst.assetId);
+        const asset = assetById(inst.assetId, assets);
         const ref = instanceRef(inst, asset);
         const t = drag && drag.id === inst.id ? drag : inst.t;
-        const label =
-          Math.min(ref.w, ref.d) >= 380 && !NOLABEL.includes(ref.type)
-            ? `<text transform="rotate(${-t.rot})" font-size="${Math.max(80, Math.min(170, Math.min(ref.w, ref.d) * 0.2))}" text-anchor="middle" dominant-baseline="central" fill="#4a443c" opacity=".8" pointer-events="none">${ref.name}</text>`
-            : '';
         return (
           <g
             key={inst.id}
@@ -717,7 +715,11 @@ const FurnLayer = React.memo(function FurnLayer({
             className={interactive ? 'cursor-move' : ''}
             onPointerDown={interactive ? (e) => onDown(inst, e) : undefined}
           >
-            <g dangerouslySetInnerHTML={{ __html: furnSVG(ref.type, ref.w, ref.d, ref.color) + label }} />
+            <g dangerouslySetInnerHTML={{ __html: furnSVG(ref.type, ref.w, ref.d, ref.color, asset?.geometry) }} />
+            {Math.min(ref.w, ref.d) >= 380 && !NOLABEL.includes(ref.type) && (
+              <text transform={`rotate(${-t.rot})`} fontSize={Math.max(80, Math.min(170, Math.min(ref.w, ref.d) * 0.2))}
+                textAnchor="middle" dominantBaseline="central" fill="#4a443c" opacity={0.8} pointerEvents="none">{ref.name}</text>
+            )}
           </g>
         );
       })}
@@ -746,6 +748,7 @@ const LabelsLayer = React.memo(function LabelsLayer({ level }: { level: Level })
 });
 
 const SelLayer = React.memo(function SelLayer({
+  assets,
   level,
   selection,
   drag,
@@ -754,6 +757,7 @@ const SelLayer = React.memo(function SelLayer({
   onRotate,
   onWallResize,
 }: {
+  assets?: readonly Asset[];
   level: Level;
   selection: Selection;
   drag: DragState | null;
@@ -765,7 +769,7 @@ const SelLayer = React.memo(function SelLayer({
   if (selection?.kind === 'furn') {
     const inst = level.instances.find((i) => i.id === selection.id);
     if (!inst) return null;
-    const asset = assetById(inst.assetId);
+    const asset = assetById(inst.assetId, assets);
     const ref = instanceRef(inst, asset);
     const t = drag && drag.id === inst.id ? drag : inst.t;
     const p = 5 / scale;

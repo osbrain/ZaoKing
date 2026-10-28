@@ -15,16 +15,20 @@ function NumberField({
   label,
   value,
   onCommit,
+  min,
+  max,
 }: {
   label: string;
   value: number;
   onCommit: (v: number) => void;
+  min?: number;
+  max?: number;
 }) {
   const [v, setV] = useState(String(value));
   useEffect(() => setV(String(value)), [value]);
   const commit = () => {
-    const n = parseInt(v, 10);
-    if (!Number.isNaN(n) && n !== value) onCommit(n);
+    const n = Number(v);
+    if (v.trim() && Number.isFinite(n) && (min === undefined || n >= min) && (max === undefined || n <= max) && n !== value) onCommit(Math.round(n));
     else setV(String(value));
   };
   return (
@@ -59,7 +63,7 @@ export function PropsPanel() {
   if (selection?.kind === 'furn') {
     const inst = level.instances.find((i) => i.id === selection.id);
     if (!inst) return <EmptyHint />;
-    const asset = assetById(inst.assetId);
+    const asset = assetById(inst.assetId, doc.assets);
     const ref = instanceRef(inst, asset);
     return (
       <div className="space-y-4 p-4">
@@ -79,9 +83,13 @@ export function PropsPanel() {
           <NumberField label="角度 (°)" value={inst.t.rot} onCommit={(rot) => run('旋转家具', [{ type: 'move', id: inst.id, t: { ...inst.t, rot: ((rot % 360) + 360) % 360 } }])} />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <NumberField label="宽 (mm)" value={ref.w} onCommit={(w) => run('调整尺寸', [{ type: 'resize', id: inst.id, size: { w, d: ref.d } }])} />
-          <NumberField label="深 (mm)" value={ref.d} onCommit={(d) => run('调整尺寸', [{ type: 'resize', id: inst.id, size: { w: ref.w, d } }])} />
+          <NumberField min={10} max={20000} label="宽 (mm)" value={ref.w} onCommit={(w) => run('调整尺寸', [{ levelId: level.id, type: 'resize', id: inst.id, size: { w } }])} />
+          <NumberField min={10} max={20000} label="深 (mm)" value={ref.d} onCommit={(d) => run('调整尺寸', [{ levelId: level.id, type: 'resize', id: inst.id, size: { d } }])} />
         </div>
+        {asset?.type === 'custom' && (
+          <NumberField min={10} max={20000} label="高 (mm)" value={ref.h}
+            onCommit={(h) => run('调整高度', [{ levelId: level.id, type: 'resize', id: inst.id, size: { h } }])} />
+        )}
 
         <label className="flex items-center justify-between text-[11px] text-zinc-500">
           颜色覆盖

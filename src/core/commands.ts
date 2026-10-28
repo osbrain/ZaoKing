@@ -4,13 +4,14 @@
  * 用户操作、AI 操作、种子初始化共用同一入口（架构关键决策）。
  * ============================================================ */
 
-import type { ComponentInstance, Opening, Room, SceneDocument, Wall } from './types';
+import type { ComponentInstance, CustomAsset, Opening, Room, SceneDocument, Wall } from './types';
+import { CustomAssetSchema } from './assetSchema';
 
-export type Cmd =
+type LevelCmd =
   | { levelId?: string; type: 'place'; inst: ComponentInstance }
   | { levelId?: string; type: 'delete'; id: string }
   | { levelId?: string; type: 'move'; id: string; t: { x: number; y: number; rot: number } }
-  | { levelId?: string; type: 'resize'; id: string; size: { w: number; d: number } }
+  | { levelId?: string; type: 'resize'; id: string; size: { w?: number; d?: number; h?: number } }
   | { levelId?: string; type: 'setColor'; id: string; color: string }
   | { levelId?: string; type: 'replaceAsset'; id: string; assetId: string }
   | { levelId?: string; type: 'setRoomMaterial'; roomId: string; materialId: string }
@@ -27,16 +28,48 @@ export type Cmd =
   | { levelId?: string; type: 'deleteOpening'; id: string }
   | { levelId?: string; type: 'setOpening'; id: string; rect?: [number, number, number, number]; height?: number; sill?: number };
 
+type AssetCmd = (
+  | { type: 'addAsset'; asset: CustomAsset }
+  | { type: 'updateAsset'; asset: CustomAsset }
+  | { type: 'deleteAsset'; id: string }
+) & { levelId?: never };
+
+export type Cmd = LevelCmd | AssetCmd;
+
+function isAssetCommand(command: Cmd): command is AssetCmd {
+  return command.type === 'addAsset' || command.type === 'updateAsset' || command.type === 'deleteAsset';
+}
+
 export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
   if (!cmds.length) return doc;
-  if (doc.levels.length > 1 && cmds.some((command) => !command.levelId)) {
+  const levelCommands = cmds.filter((command): command is LevelCmd => !isAssetCommand(command));
+  if (doc.levels.length > 1 && levelCommands.some((command) => !command.levelId)) {
     throw new Error('Commands must target a level when the document has multiple levels');
   }
-  const unknownLevel = cmds.find((command) => command.levelId && !doc.levels.some((level) => level.id === command.levelId));
+  const unknownLevel = levelCommands.find((command) => command.levelId && !doc.levels.some((level) => level.id === command.levelId));
   if (unknownLevel) throw new Error(`Unknown level: ${unknownLevel.levelId}`);
   const d: SceneDocument = structuredClone(doc);
-  for (const lv of d.levels) {
-    for (const c of cmds) {
+  for (const c of cmds) {
+    if (isAssetCommand(c)) {
+      const id = c.type === 'deleteAsset' ? c.id : c.asset.id;
+      const exists = d.assets?.some((asset) => asset.id === id);
+      if (c.type === 'deleteAsset') {
+        if (!exists) throw new Error('组件不存在');
+        if (d.levels.some((level) => level.instances.some((instance) => instance.assetId === id))) {
+          throw new Error('组件仍在方案中使用，请先删除对应实例');
+        }
+        d.assets = d.assets?.filter((asset) => asset.id !== id);
+      } else {
+        const asset = CustomAssetSchema.parse(c.asset);
+        if (c.type === 'addAsset' && exists) throw new Error('组件 ID 已存在');
+        if (c.type === 'updateAsset' && !exists) throw new Error('组件不存在');
+        d.assets = c.type === 'addAsset'
+          ? [...(d.assets ?? []), asset]
+          : d.assets!.map((current) => current.id === id ? asset : current);
+      }
+      continue;
+    }
+    for (const lv of d.levels) {
       if (c.levelId && c.levelId !== lv.id) continue;
       switch (c.type) {
         case 'place':
@@ -52,7 +85,7 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
         }
         case 'resize': {
           const i = lv.instances.find((x) => x.id === c.id);
-          if (i) i.size = { ...c.size };
+          if (i) i.size = { ...i.size, ...c.size };
           break;
         }
         case 'setColor': {

@@ -57,7 +57,7 @@ export interface ComponentInstance {
   /** 平面变换：中心点 + 旋转角(deg, 顺时针) */
   t: { x: number; y: number; rot: number };
   /** 尺寸覆盖（参数化的最简形态） */
-  size?: { w: number; d: number };
+  size?: { w?: number; d?: number; h?: number };
   /** 颜色覆盖（2D 图例着色 / 3D 占位体着色） */
   color?: string;
   locked?: boolean;
@@ -77,6 +77,8 @@ export interface SceneDocument {
   schemaVersion: 1;
   meta: { name: string; units: 'mm' };
   levels: Level[];
+  /** 项目内组件定义，与方案一起保存；旧文档无需迁移。 */
+  assets?: CustomAsset[];
 }
 
 /* ---------- 资产目录（Asset）与材质（Material） ---------- */
@@ -93,6 +95,15 @@ export interface Asset {
   h: number;
   color: string;
   tags: string[];
+  /** 声明式几何，同时决定 2D 轮廓和 3D 造型。 */
+  geometry?: { shape: 'box' | 'cylinder' };
+}
+
+export interface CustomAsset extends Asset {
+  /** 使用 custom: 命名空间，格式由共享 schema 校验。 */
+  id: string;
+  type: 'custom';
+  geometry: { shape: 'box' | 'cylinder' };
 }
 
 export interface Material {
@@ -126,7 +137,7 @@ export function instanceRef(
   return {
     w,
     d,
-    h: asset?.h ?? 700,
+    h: inst.size?.h ?? asset?.h ?? 700,
     color: inst.color ?? asset?.color ?? '#e5e0d5',
     type: asset?.type ?? 'box',
     name: asset?.name ?? '未知组件',
