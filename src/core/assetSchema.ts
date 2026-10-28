@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import type { CustomShape } from './types';
+
+export const CustomShapeSchema = z.enum([
+  'box', 'cylinder', 'cabinet', 'wallCabinet', 'wardrobe', 'bookcase', 'dresser', 'tvConsole', 'vanity', 'kitchenIsland',
+  'sofa', 'cornerSofa', 'armchair', 'bed', 'roundTable', 'diningTable', 'desk', 'chair', 'rug',
+  'bathtub', 'toilet', 'shower', 'planter', 'floorLamp', 'pendantLight',
+]) satisfies z.ZodType<CustomShape>;
 
 /** 自定义组件只接受声明式数据，禁止脚本、HTML 和外部资源。 */
 export const CustomAssetSchema = z.object({
@@ -11,5 +18,14 @@ export const CustomAssetSchema = z.object({
   h: z.number().finite().min(10, '尺寸不能小于 10 mm').max(20000, '尺寸不能大于 20000 mm'),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '请选择有效颜色'),
   tags: z.array(z.string().trim().min(1).max(60)).max(20),
-  geometry: z.object({ shape: z.enum(['box', 'cylinder']) }).strict(),
+  geometry: z.object({
+    shape: CustomShapeSchema,
+    finish: z.enum(['wood', 'paint', 'fabric', 'metal', 'ceramic', 'glass']).optional(),
+    parameters: z.object({
+      compartments: z.number().int().min(1).max(8).optional(),
+      shelves: z.number().int().min(0).max(12).optional(),
+      drawers: z.number().int().min(1).max(8).optional(),
+      seats: z.number().int().min(1).max(5).optional(),
+    }).strict().optional(),
+  }).strict(),
 }).strict();

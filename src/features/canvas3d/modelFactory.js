@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
-/** @param {THREE.Texture} envTex @param {number} anisotropy */
+/** @param {THREE.Texture | null} envTex @param {number} anisotropy */
 export function createModelFactory(envTex, anisotropy = 8) {
   const matCache = new Map();
   const envK = 1;
@@ -11,9 +11,9 @@ export function createModelFactory(envTex, anisotropy = 8) {
   const wx = M, wz = M;
   const glassMat = new THREE.MeshPhysicalMaterial({
     color: '#cfe6ef', roughness: .05, transparent: true, opacity: .28,
-    depthWrite: false, side: THREE.DoubleSide, envMap: envTex, envMapIntensity: .5,
+    depthWrite: false, side: THREE.DoubleSide, ...(envTex ? { envMap: envTex, envMapIntensity: .5 } : {}),
   });
-  const frameMat = new THREE.MeshStandardMaterial({ color: '#5d6166', roughness: 0.5, metalness: 0.4, envMap: envTex, envMapIntensity: 0.5 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: '#5d6166', roughness: 0.5, metalness: 0.4, ...(envTex ? { envMap: envTex, envMapIntensity: .5 } : {}) });
 function mat(color, o = {}){
   const key = color + JSON.stringify(o);
   if (!matCache.has(key)){
@@ -168,18 +168,171 @@ function tableLamp(g, x, y, z, s = 1){
 const plate = (g, r, x, y, z) => g.add(lathe([[0, 0], [r*.6, 0], [r*.72, .008], [r, .02]], ceramic({side:THREE.DoubleSide}), x, y, z, 32));
 
 /* ======================= 家具模型（局部坐标：背面朝 -z） ======================= */
+function buildCustomFurniture(g, f, w, d, c){
+  const h = M(f.h), bz = -d/2, params = f.parameters || {};
+  const finish = f.finish === 'fabric' ? fabric(c)
+    : f.finish === 'wood' ? woodM(c)
+      : f.finish === 'ceramic' ? ceramic({color:c, roughness:.28})
+        : f.finish === 'metal' ? mat(c, {metalness:.65, roughness:.32})
+          : f.finish === 'glass' ? mat(c, {transparent:true, opacity:.36, roughness:.12, metalness:.05, depthWrite:false})
+            : mat(c, {roughness:.58});
+  const trim = mat(darker(c, .78), {roughness:f.finish === 'metal' ? .35 : .7});
+  const n = Math.max(1, Math.min(8, params.compartments || 2));
+  switch (f.shape){
+    case 'box':
+      g.add(box(w, h, d, finish)); break;
+    case 'cylinder': {
+      const body = cyl(.5, .5, h, finish); body.scale.set(w, 1, d); g.add(body); break;
+    }
+    case 'cabinet': case 'wallCabinet': case 'wardrobe': case 'tvConsole': case 'kitchenIsland': case 'vanity': {
+      const plinth = f.shape === 'kitchenIsland' ? .08 : .06;
+      g.add(rbox(w, h - plinth, d, finish, 0, plinth, 0, .018));
+      const frontZ = d/2 + .004, doorW = (w - .012*(n+1))/n;
+      for (let i = 0; i < n; i++){
+        const x = -w/2 + .006 + doorW/2 + i*(doorW + .012);
+        g.add(rbox(doorW, h - plinth - .035, .018, finish, x, plinth + .01, frontZ, .008));
+        g.add(cyl(.009, .009, .035, trim, x + doorW*.28, Math.max(plinth + .13, h*.52), frontZ + .015, 12));
+      }
+      if (f.shape === 'vanity'){
+        g.add(box(w*1.04, .045, d*1.03, ceramic({color:'#eeeae1', roughness:.2}), 0, h - .06, 0));
+        const bowl = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), ceramic({color:'#fff', roughness:.18}));
+        bowl.scale.set(w*.23, .035, d*.25); bowl.position.set(0, h - .025, -d*.04); g.add(bowl);
+        g.add(box(w*.78, h*.52, .025, mat('#7f9299', {metalness:.18, roughness:.17, transparent:true, opacity:.35}), 0, h*.92, bz - .01));
+      }
+      if (f.shape === 'kitchenIsland'){
+        g.add(box(w*1.035, .055, d*1.035, ceramic({color:'#e7e2d8', roughness:.22}), 0, h-.055, 0));
+        g.add(box(w*.28, .012, d*.21, mat('#535759', {metalness:.72, roughness:.2}), -w*.25, h+.004, 0));
+        g.add(rbox(w*.18, .012, d*.14, mat('#b8c0c2', {metalness:.62, roughness:.22}), w*.22, h+.004, -.08, .012));
+      }
+      if (f.shape === 'wardrobe') for(let i = 1; i < n; i++) g.add(box(.012, h*.78, d*.88, trim, -w/2 + w*i/n, .12, -.015));
+      if (f.shape === 'tvConsole') {
+        for (const side of [-1, 1]) g.add(box(.045, Math.min(.12,h*.22), .045, trim, side*(w*.4), 0, -d*.35));
+        g.add(box(w*.7, .014, d*.48, mat('#3a3b3c',{roughness:.28}),0,h*.52,-d*.05));
+      }
+      break;
+    }
+    case 'bookcase': {
+      const shelves = Math.max(0, Math.min(12, params.shelves ?? 5)), side = Math.min(.045, w*.08), thick = Math.min(.035, h*.035);
+      g.add(box(side, h, d, finish, -w/2+side/2), box(side, h, d, finish, w/2-side/2));
+      g.add(box(w-side*2, thick, d, finish, 0, 0), box(w-side*2, thick, d, finish, 0, h-thick));
+      for(let i = 1; i <= shelves; i++) g.add(box(w-side*2, thick, d*.94, finish, 0, h*i/(shelves+1), -d*.02));
+      break;
+    }
+    case 'dresser': {
+      const count = Math.max(1, Math.min(8, params.drawers || 4)), gap = Math.min(.025, h/(count*12));
+      g.add(rbox(w, h, d, trim, 0, 0, 0, .016));
+      for(let i = 0; i < count; i++){
+        const drawerH = (h-gap*(count+1))/count, y = gap+i*(drawerH+gap);
+        g.add(rbox(w-.035, drawerH, .025, finish, 0, y, d/2+.012, .008));
+        g.add(cyl(.012,.012,.024,trim,0,y+drawerH*.54,d/2+.03,12));
+      }
+      break;
+    }
+    case 'sofa': case 'cornerSofa': case 'armchair': {
+      if (f.shape === 'cornerSofa') {
+        const depth=Math.min(d*.32,w*.3), legH=Math.min(.12,h*.15), backH=h*.56;
+        legs(g,w,d,legH,woodM('#514338'),.06,.018);
+        g.add(rbox(w,.15,depth,trim,0,legH,-d/2+depth/2,.04),rbox(depth,.15,d-depth,trim,-w/2+depth/2,legH,depth/2,.04));
+        g.add(rbox(w,backH,Math.min(.2,depth*.42),finish,0,legH+.13,-d/2+depth*.24,.055));
+        g.add(rbox(Math.min(.2,depth*.42),backH,d-depth*.35,finish,-w/2+depth*.24,legH+.13,depth*.325,.055));
+        const seatH=h*.2, seatD=d-depth;
+        g.add(rbox(w-depth*.7,seatH,seatD*.92,finish,depth*.32,legH+.15,depth/2+seatD*.46,.05));
+        g.add(rbox(depth*.7,seatH,seatD*.92,finish,-w/2+depth*.35,legH+.15,depth/2+seatD*.46,.05));
+        break;
+      }
+      const seats = f.shape === 'armchair' ? 1 : Math.max(1, Math.min(5, params.seats || 3));
+      const legH = Math.min(.13, h*.16), armW = Math.min(w*.13, .19), backD = Math.min(d*.24, .22), seatD = d-backD;
+      legs(g,w,d,legH,woodM('#514338'),.065,.018);
+      g.add(rbox(w,.14,d,trim,0,legH,0,.045), rbox(w*.95,h*.48,backD,finish,0,legH+.14,bz+backD/2,.06));
+      for(const side of [-1,1]) g.add(rbox(armW,h*.43,d,finish,side*(w-armW)/2,legH+.1,0,.055));
+      for(let i=0;i<seats;i++){
+        const sw=(w-armW*2)/seats, x=-w/2+armW+sw*(i+.5);
+        g.add(rbox(sw-.018,h*.19,seatD*.86,finish,x,legH+.14,bz+backD+seatD*.43,.055));
+      }
+      break;
+    }
+    case 'bed': {
+      const baseH=h*.29, headH=h*.8, mattressD=d*.95;
+      g.add(rbox(w,baseH,d*.96,woodM('#806955'),0,0,0,.035), rbox(w*.96,h*.12,mattressD*.96,'#f4f1eb',0,baseH,bz+mattressD/2,.055));
+      g.add(rbox(w,h*.43,.07,finish,0,baseH,bz+.025,.025));
+      g.add(rbox(w*.88,h*.16,d*.36,finish,0,baseH+h*.12,d*.18,.06));
+      break;
+    }
+    case 'roundTable': case 'diningTable': case 'desk': {
+      const topH=Math.max(.035,h*.055), topY=h-topH, topGeo=f.shape==='roundTable'?new THREE.CylinderGeometry(w*.48,w*.48,topH,48):new THREE.BoxGeometry(w,topH,d);
+      const top=new THREE.Mesh(topGeo,finish); top.position.y=topY+topH/2; sh(top); g.add(top);
+      const leg=mat('#5a4b3d',{roughness:.62});
+      if(f.shape==='roundTable') g.add(cyl(.08,.1,topY,leg,0,0,0));
+      else for(const x of [-1,1]) for(const z of [-1,1]) g.add(box(.055,topY-.015,.055,leg,x*(w/2-.08),0,z*(d/2-.08)));
+      break;
+    }
+    case 'chair': {
+      const seatY=h*.51, leg=mat('#56483c',{roughness:.62});
+      g.add(rbox(w*.84,.075,d*.78,finish,0,seatY,0,.025),rbox(w*.84,h*.42,.055,finish,0,seatY+.05,bz+.035,.025));
+      for(const x of [-1,1]) for(const z of [-1,1]) g.add(box(.035,seatY,.035,leg,x*(w*.36),0,z*(d*.34)));
+      break;
+    }
+    case 'rug': {
+      g.add(rbox(w,.012,d,finish,0,0,0,.025),rbox(w*.91,.002,d*.91,mat(darker(c,.88)),0,.012,0,.02));
+      break;
+    }
+    case 'bathtub': {
+      const outer=rbox(w,h*.55,d,ceramic({color:'#f4f2ec',roughness:.22}),0,0,0,.1); g.add(outer);
+      const basin=new THREE.Mesh(new THREE.SphereGeometry(1,40,24),ceramic({color:f.color,roughness:.22}));
+      basin.scale.set(w*.42,h*.24,d*.39); basin.position.set(0,h*.48,0); g.add(basin);
+      g.add(cyl(.018,.018,.014,mat('#7d888b',{metalness:.72,roughness:.23}),w*.34,h*.49,-d*.25,16));
+      break;
+    }
+    case 'toilet': {
+      const porcelain=ceramic({color:'#faf9f5',roughness:.2});
+      const bowl=new THREE.Mesh(new THREE.SphereGeometry(1,36,24),porcelain); bowl.scale.set(w*.48,h*.21,d*.48); bowl.position.set(0,h*.23,d*.12); g.add(bowl);
+      const seat=new THREE.Mesh(new THREE.TorusGeometry(Math.min(w,d)*.31,.018,10,40),porcelain); seat.rotation.x=Math.PI/2; seat.scale.set(1,1.35,1); seat.position.set(0,h*.34,d*.12); g.add(seat);
+      g.add(rbox(w*.82,h*.36,d*.29,porcelain,0,h*.42,bz+d*.16,.035));
+      break;
+    }
+    case 'shower': {
+      const frame=mat('#778489',{metalness:.63,roughness:.24}), glass=mat('#cfe0e4',{transparent:true,opacity:.23,roughness:.1,side:THREE.DoubleSide,depthWrite:false});
+      g.add(box(w,.035,d,ceramic({color:'#e8e4dc',roughness:.28}),0,0));
+      for(const x of [-1,1]) g.add(box(.024,h,.024,frame,x*(w/2-.012),0,-d/2+.012));
+      for(const z of [-1,1]) g.add(box(w,.024,.024,frame,0,0,z*(d/2-.012)));
+      g.add(box(w-.045,h-.05,.008,glass,0,.025,-d/2+.02),box(.008,h-.05,d*.48,glass,w/2-.02,.025,0));
+      break;
+    }
+    case 'planter': {
+      const potH=Math.min(h*.28,Math.min(w,d)*.58), radius=Math.min(w,d)*.32, base=radius*.72;
+      g.add(cyl(radius,base,potH,ceramic({color:f.color,roughness:.52}),0,0,0,32));
+      const leafColors=['#68844f','#82985b','#557346','#98a86b'];
+      for(let i=0;i<7;i++){
+        const a=i*2.399, rr=radius*.45, y=potH+h*(.24+(i%3)*.12), x=Math.cos(a)*rr, z=Math.sin(a)*rr;
+        const leaf=blob(w*.12,h*.2,d*.12,leafColors[i%4],x,y,z,16); leaf.rotation.z=Math.cos(a)*.42; leaf.rotation.x=Math.sin(a)*.3; g.add(leaf);
+      }
+      break;
+    }
+    case 'floorLamp': case 'pendantLight': {
+      const metal=mat(f.finish==='metal'?f.color:'#9a9183',{metalness:.65,roughness:.3}), light=mat('#f4e5c7',{emissive:'#f7d899',emissiveIntensity:.65,roughness:.25,side:THREE.DoubleSide});
+      if(f.shape==='floorLamp'){
+        g.add(cyl(Math.min(w,d)*.34,Math.min(w,d)*.38,.045,metal),cyl(.018,.022,h*.68,metal,0,.045));
+        const shade=new THREE.Mesh(new THREE.CylinderGeometry(.045,Math.min(w,d)*.3,h*.23,32,1,true),light); shade.position.set(0,h*.81,0); g.add(shade);
+      } else {
+        g.add(cyl(.012,.012,h*.63,metal,0,h*.36));
+        const shade=new THREE.Mesh(new THREE.CylinderGeometry(.045,Math.min(w,d)*.4,h*.34,32,1,true),light); shade.position.set(0,h*.2,0); g.add(shade);
+      }
+      break;
+    }
+    default: g.add(box(w,h,d,finish));
+  }
+}
+
 function buildFurniture(f){
   const g = new THREE.Group(), w = M(f.w), d = M(f.d), c = f.color || '#ddd', bz = -d/2, R = rng(Math.round(f.w*7 + f.d*13 + f.cx + f.cy));
   switch (f.type){
     case 'custom': {
-      const h = M(f.h);
-      if (f.shape === 'cylinder') {
-        const body = cyl(.5, .5, h, c);
-        body.scale.set(w, 1, d);
-        g.add(body);
-      } else {
-        g.add(box(w, h, d, c));
-      }
+      const custom = new THREE.Group();
+      buildCustomFurniture(custom, f, w, d, c);
+      const bounds = new THREE.Box3().setFromObject(custom), center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
+      custom.scale.set(w / Math.max(size.x, 1e-4), M(f.h) / Math.max(size.y, 1e-4), d / Math.max(size.z, 1e-4));
+      custom.position.set(-center.x * custom.scale.x, -bounds.min.y * custom.scale.y, -center.z * custom.scale.z);
+      g.add(custom);
       break;
     }
     case 'bed': {

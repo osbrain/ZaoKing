@@ -138,13 +138,14 @@ function Furniture({ inst, models, asset }: { inst: ComponentInstance; models: M
   const ref = instanceRef(inst, asset);
   const object = useMemo(() => {
     const model = models.buildFurniture({
-      id: inst.id, type: ref.type, w: Math.max(10, ref.w), d: Math.max(10, ref.d), h: ref.h, shape: asset?.geometry?.shape,
+      id: inst.id, type: ref.type, w: Math.max(10, ref.w), d: Math.max(10, ref.d), h: ref.h,
+      shape: asset?.geometry?.shape, finish: asset?.geometry?.finish, parameters: asset?.geometry?.parameters,
       color: ref.color, cx: 6000, cy: 5300, rot: 0,
     }) as THREE.Group;
     // Source models place themselves relative to the static prototype's origin.
     model.position.set(0, 0, 0);
     return model;
-  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, asset?.geometry?.shape]);
+  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, asset?.geometry]);
   useEffect(() => () => disposeModelGeometry(object), [object]);
   return (
     <group position={[inst.t.x / 1000, 0.015, -inst.t.y / 1000]} rotation={[0, inst.t.rot * Math.PI / 180, 0]}

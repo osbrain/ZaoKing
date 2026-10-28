@@ -73,9 +73,7 @@ export function furnSVG(t: string, w: number, d: number, c: string, geometry?: A
   const m = Math.min(w, d);
   switch (t) {
     case 'custom':
-      return geometry?.shape === 'cylinder'
-        ? `<ellipse cx="0" cy="0" rx="${w / 2}" ry="${d / 2}" fill="${c}" ${ST}/>`
-        : rc(x, y, w, d, c);
+      return customPlanSvg(geometry?.shape ?? 'box', w, d, c, geometry?.parameters);
     case 'bed': {
       let s = rc(x, y, w, d, '#fbf8f2', 'rx="30"') + rc(x, y, w, Math.min(90, d * 0.05), shade(c, 0.62), 'rx="20"');
       const ph = Math.min(360, d * 0.18);
@@ -225,6 +223,77 @@ export function furnSVG(t: string, w: number, d: number, c: string, geometry?: A
     default:
       return rc(x, y, w, d, c);
   }
+}
+
+function customPlanSvg(
+  shape: NonNullable<Asset['geometry']>['shape'], w: number, d: number, color: string,
+  parameters?: NonNullable<Asset['geometry']>['parameters'],
+): string {
+  const x = -w / 2, y = -d / 2, p = parameters ?? {};
+  const label = (geometry: string) => geometry;
+  switch (shape) {
+    case 'cylinder': case 'roundTable': case 'planter':
+      return ec(0, 0, w * .48, d * .48, color) + ec(0, 0, w * .42, d * .42, 'none');
+    case 'cabinet': case 'wallCabinet': case 'wardrobe': case 'tvConsole': case 'kitchenIsland': {
+      const count = p.compartments ?? 2;
+      let s = rc(x, y, w, d, color, 'rx="18"') + rc(x + 45, y + 45, w - 90, d - 90, 'none', 'rx="10"');
+      for (let i = 1; i < count; i++) s += ln(x + w * i / count, y + 50, x + w * i / count, y + d - 50);
+      if (shape === 'wardrobe') for (let i = 0; i < count; i++) s += ec(x + w * (i + .83) / count, 0, 14, 14, '#807261');
+      if (shape === 'kitchenIsland') s += rc(x + w * .14, y + d * .2, w * .3, d * .24, '#9ca7a7', 'rx="35"') + ec(x + w * .68, y + d * .32, Math.min(w, d) * .08, Math.min(w, d) * .08, 'none');
+      return s;
+    }
+    case 'bookcase': {
+      const count = p.shelves ?? 5;
+      let s = rc(x, y, w, d, color) + ln(x + 45, y, x + 45, y + d) + ln(x + w - 45, y, x + w - 45, y + d);
+      for (let i = 1; i < count; i++) s += ln(x + 45, y + d * i / count, x + w - 45, y + d * i / count);
+      return s;
+    }
+    case 'dresser': {
+      const count = p.drawers ?? 4;
+      let s = rc(x, y, w, d, color, 'rx="12"');
+      for (let i = 0; i < count; i++) {
+        const rowY = y + d * i / count;
+        s += rc(x + 70, rowY + 40, w - 140, d / count - 80, 'none', 'rx="10"') + ln(-45, rowY + d / count / 2, 45, rowY + d / count / 2);
+      }
+      return s;
+    }
+    case 'vanity':
+      return rc(x, y, w, d, color, 'rx="18"') + rc(x + 55, y + 45, w - 110, d * .36, 'none') +
+        ec(0, y + d * .68, w * .24, d * .22, '#f5f4ef') + ec(0, y + d * .68, 22, 22, '#88949a');
+    case 'sofa': case 'cornerSofa': case 'armchair': {
+      const count = shape === 'armchair' ? 1 : p.seats ?? 3, arm = Math.min(w * .14, d * .24);
+      if (shape === 'cornerSofa') {
+        const depth = Math.min(d * .32, w * .3);
+        return rc(x, y, w, d, shade(color, .82), 'rx="80"') + rc(x + arm, y + depth, w - arm - depth, d - depth - 35, color, 'rx="55"') +
+          rc(x + arm, y + 35, w - arm * 2, depth, shade(color, .76), 'rx="55"') + rc(x + arm, y + depth, depth, d - depth - 35, shade(color, .76), 'rx="55"');
+      }
+      let s = rc(x, y, w, d, shade(color, .82), 'rx="80"') + rc(x + arm, y + d * .25, w - arm * 2, d * .7, color, 'rx="55"');
+      for (let i = 1; i < count; i++) s += ln(x + arm + (w - arm * 2) * i / count, y + d * .32, x + arm + (w - arm * 2) * i / count, y + d * .87);
+      return s;
+    }
+    case 'bed':
+      return rc(x, y, w, d, '#eee8de', 'rx="28"') + rc(x + 40, y + 45, w - 80, d * .18, shade(color, .75), 'rx="20"') +
+        rc(x + 65, y + d * .26, w * .37, d * .16, '#fff', 'rx="42"') + rc(-x - w * .37 - 65, y + d * .26, w * .37, d * .16, '#fff', 'rx="42"') +
+        rc(x + 25, y + d * .47, w - 50, d * .49, color, 'rx="35"');
+    case 'diningTable': case 'desk': case 'rug':
+      if (shape === 'rug') return rc(x, y, w, d, color, 'rx="100"') + rc(x + 65, y + 65, w - 130, d - 130, 'none', 'rx="65"');
+      return rc(x, y, w, d, color, 'rx="32"') + rc(x + w * .1, y + d * .12, w * .8, d * .76, 'none', 'rx="20"') +
+        (shape === 'desk' ? ec(0, y + d + Math.min(d * .18, 120), Math.min(w * .12, 160), Math.min(d * .12, 100), '#8c9694') : '');
+    case 'chair':
+      return rc(x + w * .12, y + d * .35, w * .76, d * .55, color, 'rx="22"') + rc(x + w * .12, y + d * .08, w * .76, d * .18, shade(color, .8), 'rx="15"');
+    case 'bathtub':
+      return rc(x, y, w, d, '#f6f5f1', 'rx="180"') + rc(x + w * .08, y + d * .08, w * .84, d * .84, color, 'rx="150"') + ec(x + w * .83, y + d * .16, 32, 32, '#a7abad');
+    case 'toilet':
+      return rc(x + w * .16, y, w * .68, d * .28, '#fff', 'rx="22"') + ec(0, y + d * .61, w * .43, d * .37, '#fff') + ec(0, y + d * .61, w * .28, d * .24, 'none');
+    case 'shower':
+      return rc(x, y, w, d, '#e8f0f1', 'rx="12"') + ln(x + 80, y + 80, x + w - 80, y + d - 80) + ln(x + w - 80, y + 80, x + 80, y + d - 80) + ec(x + w * .78, y + d * .2, 35, 35, '#839394');
+    case 'floorLamp': case 'pendantLight': {
+      const r = Math.min(w, d) * .44;
+      return ec(0, 0, r, r, color) + ec(0, 0, r * .72, r * .72, '#fff9e8') +
+        (shape === 'floorLamp' ? ec(0, 0, r * .12, r * .12, '#5d6062') : ec(0, 0, r * .1, r * .1, '#7a6d57'));
+    }
+  }
+  return rc(x, y, w, d, color);
 }
 
 /* ---------- 门窗 2D 符号（原型 renderOpenings 移植） ---------- */

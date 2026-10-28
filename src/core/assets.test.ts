@@ -9,6 +9,8 @@ import { instAABB } from './geometry';
 import { executeOps } from './ops';
 import { furnSVG } from './symbols2d';
 import { createModelFactory, disposeModelGeometry } from '../features/canvas3d/modelFactory';
+import { COMPONENT_TEMPLATES } from './componentTemplates';
+import { CustomAssetSchema } from './assetSchema';
 
 const asset: CustomAsset = {
   id: 'custom:console', type: 'custom', name: '定制玄关柜', category: '客厅',
@@ -70,7 +72,7 @@ describe('project component definitions', () => {
 
 describe('declarative component rendering', () => {
   it('renders an ellipse in 2D and sanitizes color attributes', () => {
-    expect(furnSVG('custom', 1200, 400, asset.color, { shape: 'cylinder' })).toContain('rx="600" ry="200"');
+    expect(furnSVG('custom', 1200, 400, asset.color, { shape: 'cylinder' })).toContain('rx="576" ry="192"');
     expect(furnSVG('custom', 1200, 400, '" onload="alert(1)', { shape: 'box' })).not.toContain('onload');
   });
 
@@ -83,5 +85,35 @@ describe('declarative component rendering', () => {
     expect(size.y).toBeCloseTo(1.8);
     expect(size.z).toBeCloseTo(0.4);
     disposeModelGeometry(object); factory.dispose(); environment.dispose();
+  });
+
+  it('provides a bounded 2D and 3D template for every custom furniture category', () => {
+    expect(COMPONENT_TEMPLATES.length).toBeGreaterThanOrEqual(20);
+    const environment = new THREE.Texture();
+    const factory = createModelFactory(environment);
+    for (const template of COMPONENT_TEMPLATES) {
+      const customAsset: CustomAsset = {
+        ...asset,
+        id: `custom:${template.shape}`,
+        name: template.name,
+        category: template.category,
+        w: template.dimensions.w,
+        d: template.dimensions.d,
+        h: template.dimensions.h,
+        geometry: { shape: template.shape, finish: template.finish, parameters: template.parameters },
+      };
+      expect(() => CustomAssetSchema.parse(customAsset), template.name).not.toThrow();
+      expect(furnSVG('custom', customAsset.w, customAsset.d, customAsset.color, customAsset.geometry), template.name).not.toBe('');
+      const object = factory.buildFurniture({ ...customAsset, ...customAsset.geometry, cx: 0, cy: 0, rot: 0 });
+      const bounds = new THREE.Box3().setFromObject(object);
+      const size = bounds.getSize(new THREE.Vector3());
+      expect(size.x, `${template.name} width`).toBeCloseTo(customAsset.w / 1000, 4);
+      expect(size.y, `${template.name} height`).toBeCloseTo(customAsset.h / 1000, 4);
+      expect(size.z, `${template.name} depth`).toBeCloseTo(customAsset.d / 1000, 4);
+      expect(bounds.min.y, `${template.name} rests on the floor`).toBeCloseTo(0, 4);
+      disposeModelGeometry(object);
+    }
+    factory.dispose();
+    environment.dispose();
   });
 });

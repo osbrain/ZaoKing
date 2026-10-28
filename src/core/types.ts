@@ -96,14 +96,27 @@ export interface Asset {
   color: string;
   tags: string[];
   /** 声明式几何，同时决定 2D 轮廓和 3D 造型。 */
-  geometry?: { shape: 'box' | 'cylinder' };
+  geometry?: CustomGeometry;
+}
+
+export type CustomShape =
+  | 'box' | 'cylinder' | 'cabinet' | 'wallCabinet' | 'wardrobe' | 'bookcase' | 'dresser' | 'tvConsole' | 'vanity' | 'kitchenIsland'
+  | 'sofa' | 'cornerSofa' | 'armchair' | 'bed' | 'roundTable' | 'diningTable' | 'desk' | 'chair' | 'rug'
+  | 'bathtub' | 'toilet' | 'shower' | 'planter' | 'floorLamp' | 'pendantLight';
+
+export type CustomFinish = 'wood' | 'paint' | 'fabric' | 'metal' | 'ceramic' | 'glass';
+
+export interface CustomGeometry {
+  shape: CustomShape;
+  finish?: CustomFinish;
+  parameters?: { compartments?: number; shelves?: number; drawers?: number; seats?: number };
 }
 
 export interface CustomAsset extends Asset {
   /** 使用 custom: 命名空间，格式由共享 schema 校验。 */
   id: string;
   type: 'custom';
-  geometry: { shape: 'box' | 'cylinder' };
+  geometry: CustomGeometry;
 }
 
 export interface Material {
