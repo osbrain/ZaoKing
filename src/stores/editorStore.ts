@@ -1,0 +1,68 @@
+/* 编辑器瞬态 store：视图模式、相机、选区、工具、光标、面板状态。
+ * 与 sceneStore 严格分离 —— 这里的一切都不持久化。 */
+
+import { create } from 'zustand';
+
+export type Selection =
+  | { kind: 'furn'; id: string }
+  | { kind: 'room'; id: string }
+  | { kind: 'wall'; id: string }
+  | { kind: 'opening'; id: string }
+  | null;
+
+export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window';
+export type WallPreset = 'exterior' | 'partition' | 'low';
+
+export type Camera = { cx: number; cy: number; scale: number };
+
+interface EditorState {
+  viewMode: '2d' | '3d';
+  camera: Camera;
+  selection: Selection;
+  tool: Tool;
+  wallPreset: WallPreset;
+  cursor: { x: number; y: number } | null;
+  rightTab: 'props' | 'ai' | 'stats';
+  toast: string | null;
+  preset3d: { kind: 'iso' | 'top'; n: number };
+
+  setViewMode: (m: '2d' | '3d') => void;
+  setCamera: (c: Camera) => void;
+  select: (s: Selection) => void;
+  setTool: (t: Tool) => void;
+  setWallPreset: (p: WallPreset) => void;
+  setCursor: (c: { x: number; y: number } | null) => void;
+  setRightTab: (t: EditorState['rightTab']) => void;
+  showToast: (msg: string) => void;
+  setPreset3d: (kind: 'iso' | 'top') => void;
+}
+
+export const useEditorStore = create<EditorState>((set, get) => ({
+  viewMode: '2d',
+  camera: { cx: 5000, cy: 5000, scale: 0.06 },
+  selection: null,
+  tool: 'select',
+  wallPreset: 'exterior',
+  cursor: null,
+  rightTab: 'props',
+  toast: null,
+  preset3d: { kind: 'iso', n: 0 },
+
+  setViewMode: (m) => set({ viewMode: m }),
+  setCamera: (c) => set({ camera: c }),
+  select: (s) => {
+    set({ selection: s });
+    if (s) set({ rightTab: 'props' });
+  },
+  setTool: (t) => set({ tool: t }),
+  setWallPreset: (p) => set({ wallPreset: p }),
+  setCursor: (c) => set({ cursor: c }),
+  setRightTab: (t) => set({ rightTab: t }),
+  showToast: (msg) => {
+    set({ toast: msg });
+    setTimeout(() => {
+      if (get().toast === msg) set({ toast: null });
+    }, 2600);
+  },
+  setPreset3d: (kind) => set({ preset3d: { kind, n: get().preset3d.n + 1 } }),
+}));

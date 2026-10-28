@@ -1,0 +1,31 @@
+// SQLite 用于零配置本地开发；生产切换 provider = "postgresql" 并启用 pgvector 扩展。
+// document 字段存整个 SceneDocument 的 JSON 字符串（PG 上可改为 Json 类型）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  designs   Design[]
+}
+
+model Design {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document  String
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, updatedAt])
+}
