@@ -28,10 +28,10 @@ function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let 
 const rgbK = (hex, k) => { const n = parseInt(hex.slice(1), 16); const f = v => Math.max(0, Math.min(255, Math.round(v*k))); return `rgb(${f(n>>16&255)},${f(n>>8&255)},${f(n&255)})`; };
 // 地面贴图按真实尺寸平铺（UV 单位 = 米）
 const TEX = {
-  wood:{sx:1.8, sy:.36, base:'#d6b58a', rough:.55}, walnut:{sx:1.8, sy:.36, base:'#9a6f4b', rough:.5},
-  tile800:{sx:.8, sy:.8, base:'#ebe6dd', grout:'#cfc6b7', rough:.3}, tile600:{sx:.6, sy:.6, base:'#dfe3e0', grout:'#bfc6c1', rough:.35},
-  antislip:{sx:.3, sy:.3, base:'#d3d8d4', grout:'#aab2ac', rough:.8}, marble:{sx:1.2, sy:1.2, base:'#f2efe9', grout:'#d9d2c4', rough:.18},
-  terrazzo:{sx:.5, sy:.5, base:'#e6dfd3', rough:.4}, carpet:{sx:.3, sy:.3, base:'#c6bfd2', rough:1},
+  wood:{sx:1.8, sy:.36, base:'#b38a5b', rough:.6}, walnut:{sx:1.8, sy:.36, base:'#744b2f', rough:.55},
+  tile800:{sx:.8, sy:.8, base:'#cbc3b7', grout:'#a99f91', rough:.36}, tile600:{sx:.6, sy:.6, base:'#bdc5c1', grout:'#969f99', rough:.42},
+  antislip:{sx:.3, sy:.3, base:'#afb8b3', grout:'#858f88', rough:.84}, marble:{sx:1.2, sy:1.2, base:'#d9d5cd', grout:'#bcb4a7', rough:.24},
+  terrazzo:{sx:.5, sy:.5, base:'#c9bca9', rough:.47}, carpet:{sx:.3, sy:.3, base:'#958ca7', rough:1},
 };
 const floorMats = {};
 function floorMat(kind){
@@ -253,7 +253,7 @@ function buildCustomFurniture(g, f, w, d, c){
     }
     case 'bed': {
       const baseH=h*.29, headH=h*.8, mattressD=d*.95;
-      g.add(rbox(w,baseH,d*.96,woodM('#806955'),0,0,0,.035), rbox(w*.96,h*.12,mattressD*.96,'#f4f1eb',0,baseH,bz+mattressD/2,.055));
+      g.add(rbox(w,baseH,d*.96,woodM('#806955'),0,0,0,.035), rbox(w*.96,h*.12,mattressD*.96,'#ded8ce',0,baseH,bz+mattressD/2,.055));
       g.add(rbox(w,h*.43,.07,finish,0,baseH,bz+.025,.025));
       g.add(rbox(w*.88,h*.16,d*.36,finish,0,baseH+h*.12,d*.18,.06));
       break;
@@ -341,13 +341,13 @@ function buildFurniture(f){
       g.add(rbox(w, 1.08, .06, fr, 0, 0, bz + .03, .012));                                                                 // 床头板
       for (let i = 0; i < n; i++) g.add(rbox(sw - .006, .62, .06, fabric(darker(c, .8)), -w/2 + .02 + sw*(i + .5), .42, bz + .08, .025));   // 竖向软包
       const md = d - .13, dd = md*.66, dz = d/2 - .015 - dd/2;
-      g.add(rbox(w - .06, mt, md, '#f6f3ee', 0, fh, bz + .11 + md/2, .07));                                              // 床垫
-      g.add(rbox(w + .02, .27, dd, fab, 0, top - .2, dz, .04), rbox(w + .024, .06, .22, fabric('#fbfaf7'), 0, top + .025, dz - dd/2 + .11, .025));   // 被子 + 翻边
+      g.add(rbox(w - .06, mt, md, '#ded8ce', 0, fh, bz + .11 + md/2, .07));                                              // 床垫
+      g.add(rbox(w + .02, .27, dd, fab, 0, top - .2, dz, .04), rbox(w + .024, .06, .22, fabric('#e8e2d8'), 0, top + .025, dz - dd/2 + .11, .025));   // 被子 + 翻边
       g.add(rbox(w + .05, .285, .42, fabric(darker(c, .62)), 0, top - .205, d/2 - .35, .03));                               // 床尾巾
       const np = w >= 1.3 ? 2 : 1, pw = (w - .16 - (np-1)*.06)/np;
       for (let i = 0; i < np; i++){
         const x = -w/2 + .08 + pw/2 + i*(pw + .06);
-        g.add(rot(rbox(pw, .15, .42, fabric('#ffffff'), x, top - .01, bz + .34, .07), -.28), rot(rbox(pw*.62, .3, .1, fabric(i ? '#efe7da' : darker(c, .7)), x, top, bz + .54, .045), -.3));
+        g.add(rot(rbox(pw, .15, .42, fabric('#e5dfd5'), x, top - .01, bz + .34, .07), -.28), rot(rbox(pw*.62, .3, .1, fabric(i ? '#d8cfc1' : darker(c, .7)), x, top, bz + .54, .045), -.3));
       }
       break;
     }

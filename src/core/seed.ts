@@ -112,7 +112,7 @@ const RAW_ROOMS: RawRoom[] = [
 interface RawF { type: string; name: string; cx: number; cy: number; w: number; d: number; rot: number; color?: string }
 const RAW_FURN: RawF[] = [
   // 主卧
-  { type: 'bed', name: '双人床', cx: 8300, cy: 1000, w: 1800, d: 2000, rot: 0, color: '#c9d6df' },
+  { type: 'bed', name: '双人床', cx: 8300, cy: 1000, w: 1800, d: 2000, rot: 0, color: '#718d99' },
   { type: 'nightstand', name: '床头柜', cx: 7150, cy: 220, w: 450, d: 400, rot: 0 },
   { type: 'nightstand', name: '床头柜', cx: 9450, cy: 220, w: 450, d: 400, rot: 0 },
   { type: 'wardrobe', name: '衣柜', cx: 8800, cy: 3070, w: 2400, d: 600, rot: 180 },
@@ -122,7 +122,7 @@ const RAW_FURN: RawF[] = [
   { type: 'toilet', name: '马桶', cx: 5170, cy: 1500, w: 400, d: 700, rot: 270 },
   { type: 'vanity', name: '浴室柜', cx: 6110, cy: 700, w: 800, d: 500, rot: 90 },
   // 小孩房
-  { type: 'bed', name: '单人床', cx: 2420, cy: 1000, w: 1200, d: 2000, rot: 0, color: '#e8d5b5' },
+  { type: 'bed', name: '单人床', cx: 2420, cy: 1000, w: 1200, d: 2000, rot: 0, color: '#aa854f' },
   { type: 'desk', name: '书桌', cx: 2120, cy: 2700, w: 1200, d: 600, rot: 270 },
   { type: 'chair', name: '椅子', cx: 2700, cy: 2700, w: 450, d: 480, rot: 90 },
   { type: 'wardrobe', name: '衣柜', cx: 4280, cy: 1000, w: 1600, d: 600, rot: 90 },
@@ -157,15 +157,15 @@ const RAW_FURN: RawF[] = [
   { type: 'plant', name: '绿植', cx: 9950, cy: 10250, w: 500, d: 500, rot: 0 },
   { type: 'plant', name: '绿植', cx: 5250, cy: 7050, w: 500, d: 500, rot: 0 },
   // 子女房
-  { type: 'bed', name: '双人床', cx: 7323, cy: 5500, w: 1500, d: 2000, rot: 270, color: '#d8c7dc' },
+  { type: 'bed', name: '双人床', cx: 7323, cy: 5500, w: 1500, d: 2000, rot: 270, color: '#94798c' },
   { type: 'wardrobe', name: '衣柜', cx: 8500, cy: 3910, w: 2000, d: 600, rot: 0 },
   { type: 'desk', name: '书桌', cx: 9500, cy: 6070, w: 1200, d: 600, rot: 180 },
   { type: 'chair', name: '椅子', cx: 9500, cy: 5480, w: 450, d: 480, rot: 0 },
   { type: 'baycushion', name: '飘窗垫', cx: 10770, cy: 4997, w: 520, d: 1575, rot: 0 },
   // 休闲阳台
   { type: 'roundtable', name: '茶桌', cx: 11180, cy: 8200, w: 600, d: 600, rot: 0 },
-  { type: 'armchair', name: '休闲椅', cx: 11180, cy: 7520, w: 750, d: 750, rot: 0, color: '#d6b99a' },
-  { type: 'armchair', name: '休闲椅', cx: 11180, cy: 8880, w: 750, d: 750, rot: 180, color: '#d6b99a' },
+  { type: 'armchair', name: '休闲椅', cx: 11180, cy: 7520, w: 750, d: 750, rot: 0, color: '#986f4d' },
+  { type: 'armchair', name: '休闲椅', cx: 11180, cy: 8880, w: 750, d: 750, rot: 180, color: '#986f4d' },
   { type: 'plant', name: '绿植', cx: 11550, cy: 10250, w: 500, d: 500, rot: 0 },
 ];
 

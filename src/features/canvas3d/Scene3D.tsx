@@ -26,7 +26,7 @@ function Solid({ rect, bottom, top, color, cap = true }: {
     <mesh position={[(x0 + x1) / 2000, (bottom + top) / 2000, -(y0 + y1) / 2000]} castShadow receiveShadow>
       <boxGeometry args={[(x1 - x0) / 1000, (top - bottom) / 1000, (y1 - y0) / 1000]} />
       {Array.from({ length: 6 }, (_, i) => (
-        <meshStandardMaterial key={i} attach={'material-' + i} color={cap && i === 2 ? color ?? '#34312d' : color ?? '#f4f1eb'} roughness={cap && i === 2 ? 0.9 : 0.92} />
+        <meshStandardMaterial key={i} attach={'material-' + i} color={cap && i === 2 ? color ?? '#34312d' : color ?? '#e4e0d8'} roughness={cap && i === 2 ? 0.9 : 0.92} />
       ))}
     </mesh>
   );
@@ -77,7 +77,7 @@ function DoorLeaf({ opening, cutHeight }: { opening: Opening; cutHeight: number 
       onClick={event => { event.stopPropagation(); setOpen(value => !value); }}>
       <mesh position={[length / 2, height / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[length, height, 0.04]} />
-        <meshStandardMaterial color={opening.kind === 'entry' ? '#6b4f3a' : '#ede2d2'} roughness={0.5} />
+        <meshStandardMaterial color={opening.kind === 'entry' ? '#6b4f3a' : '#c7ab87'} roughness={0.58} />
       </mesh>
       <mesh position={[Math.max(0.02, length - 0.07), Math.min(1, height - 0.05), 0.035]} castShadow>
         <sphereGeometry args={[0.024, 12, 8]} />
@@ -237,8 +237,8 @@ function Lighting({ level, hour }: { level: Level; hour: number }) {
   const radius = Math.max(11, (bb.x1 - bb.x0) / 2000 + 2, (bb.y1 - bb.y0) / 2000 + 2);
   return <>
     <primitive object={target} />
-    <hemisphereLight args={['#fff8ee', '#b9a88f', 1.1]} />
-    <directionalLight ref={sun} color={sunColor} intensity={1.4 + Math.sin(Math.PI * t) * 1.6}
+    <hemisphereLight args={['#fff8ee', '#938b7f', 0.55]} />
+    <directionalLight ref={sun} color={sunColor} intensity={0.65 + Math.sin(Math.PI * t) * 0.95}
       position={[center.x + Math.cos(azimuth) * 18, Math.sin(elevation) * 20 + 3, center.z - Math.sin(azimuth) * 10 + 8]}
       castShadow shadow-mapSize={[shadowSize, shadowSize]} shadow-camera-left={-radius} shadow-camera-right={radius}
       shadow-camera-top={radius} shadow-camera-bottom={-radius} shadow-camera-near={0.1} shadow-camera-far={80}
@@ -255,7 +255,7 @@ function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Leve
     const environment = generator.fromScene(room, 0.04);
     const factory = createModelFactory(environment.texture, Math.min(8, gl.capabilities.getMaxAnisotropy()));
     scene.environment = environment.texture;
-    scene.environmentIntensity = 1;
+    scene.environmentIntensity = 0.5;
     generator.dispose(); room.dispose();
     setModels(factory);
     return () => { scene.environment = null; factory.dispose(); environment.dispose(); };
@@ -266,7 +266,7 @@ function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Leve
     <Lighting level={level} hour={hour} />
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(bb.x0 + bb.x1) / 2000, -0.025, -(bb.y0 + bb.y1) / 2000]} receiveShadow>
       <planeGeometry args={[160, 160]} />
-      <meshStandardMaterial color="#f2eee7" roughness={1} />
+      <meshStandardMaterial color="#e4e0d7" roughness={1} />
     </mesh>
     {models && <>
       {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} />)}
@@ -292,7 +292,7 @@ export default function Scene3D() {
   return (
     <div className="relative h-full w-full bg-[#f7f4ee]">
       <Canvas shadows={{ type: THREE.PCFSoftShadowMap }} dpr={[1, 2]}
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
         <DetailedScene assets={doc?.assets} level={level} cutHeight={cutHeight} labels={labels} hour={hour} />
