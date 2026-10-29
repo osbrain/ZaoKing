@@ -9,7 +9,14 @@ export interface ProjectInfo {
   thumbSvg?: string;
 }
 
-export async function fetchProjects(): Promise<{ projects: ProjectInfo[]; aiMode: 'llm' | 'rules' }> {
+export type AiProviderName = 'deepseek' | 'openai';
+
+export async function fetchProjects(): Promise<{
+  projects: ProjectInfo[];
+  aiMode: 'llm' | 'rules';
+  aiProvider: AiProviderName | null;
+  visionEnabled: boolean;
+}> {
   const res = await fetch('/api/projects', { cache: 'no-store' });
   if (!res.ok) throw new Error('项目列表加载失败');
   return res.json();

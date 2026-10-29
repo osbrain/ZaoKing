@@ -1,5 +1,5 @@
 /* AI 对话路由：
- * - 配置了 OPENAI_API_KEY → OpenAI 兼容接口 Function Calling（tools 见 TOOLS）
+ * - 配置了 DEEPSEEK_API_KEY（优先）或 OPENAI_API_KEY → OpenAI 兼容接口 Function Calling
  * - 未配置 → 内置规则解析（正则意图 → DesignOp），保证离线可演示
  * 两条路径产出同一种 DesignOp；几何求解由前端 scene-core 执行器完成。 */
 
@@ -10,6 +10,7 @@ import { assetCatalog, MATERIALS, parseWidthMm } from '@/core/assets';
 import { pointInPoly } from '@/core/geometry';
 import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 import { instanceRef, type SceneDocument } from '@/core/types';
+import { getChatProviderConfig, type AiProviderConfig } from '@/lib/aiProvider';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -205,21 +206,19 @@ const TOOLS = [
   },
 ];
 
-/* ---------- LLM 路径（OpenAI 兼容接口） ---------- */
+/* ---------- LLM 路径（DeepSeek 优先的 OpenAI 兼容接口） ---------- */
 
 async function withLLM(
-  key: string,
+  provider: AiProviderConfig,
   message: string,
   doc: SceneDocument,
   history: Array<{ role: string; content: string }>,
 ): Promise<Response> {
-  const base = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-  const res = await fetch(`${base}/chat/completions`, {
+  const res = await fetch(`${provider.baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey}` },
     body: JSON.stringify({
-      model,
+      model: provider.model,
       temperature: 0.2,
       messages: [
         { role: 'system', content: `${SYSTEM_PROMPT}\n\n${packContext(doc)}` },
@@ -240,7 +239,7 @@ async function withLLM(
   const reply =
     (typeof m.content === 'string' ? m.content.trim() : '') ||
     (ops.length ? '好的，我来调整场景。' : '抱歉，我没有理解这个需求，可以换个说法试试。');
-  return NextResponse.json({ reply, ops, mode: 'llm' });
+  return NextResponse.json({ reply, ops, mode: 'llm', provider: provider.name });
 }
 
 /* ---------- 规则路径（离线兜底） ----------
@@ -333,7 +332,7 @@ function withRules(message: string): Response {
   if (!ops.length) {
     return NextResponse.json({
       reply:
-        '我目前支持这些指令（配置 OPENAI_API_KEY 后可用自然语言自由对话）：\n' +
+        '我目前支持这些指令（配置 DEEPSEEK_API_KEY 后可用自然语言自由对话）：\n' +
         '· 在客厅加一个三人沙发\n· 把主卧的床换成 1.8 米的\n· 把客厅的地面换成大理石\n· 删除客厅的茶几',
       ops,
       mode: 'rules',
@@ -360,12 +359,12 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
     const { message, doc, history = [] } = request.data;
-    const key = process.env.OPENAI_API_KEY;
-    if (key) {
+    const provider = getChatProviderConfig();
+    if (provider) {
       try {
-        return await withLLM(key, message, doc, history);
+        return await withLLM(provider, message, doc, history);
       } catch (e) {
-        console.error('[ai] LLM 调用失败，回退规则模式:', e);
+        console.error(`[ai] ${provider.name} 调用失败，回退规则模式:`, e);
       }
     }
     return withRules(message);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { FloorPlanPixelDraftSchema } from '@/core/floorplanImport';
+import { getVisionProviderConfig } from '@/lib/aiProvider';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,8 +16,8 @@ function hasImageSignature(bytes: Uint8Array, type: string) {
 }
 
 export async function POST(request: Request) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return NextResponse.json({ error: '未配置 OPENAI_API_KEY，暂时无法进行户型截图识别' }, { status: 503 });
+  const provider = getVisionProviderConfig();
+  if (!provider) return NextResponse.json({ error: '未配置视觉模型，暂时无法进行户型截图识别' }, { status: 503 });
 
   const form = await request.formData().catch(() => null);
   const file = form?.get('image');
@@ -32,19 +33,17 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (!hasImageSignature(bytes, file.type)) return NextResponse.json({ error: '图片格式与文件内容不匹配' }, { status: 400 });
   const dataUrl = `data:${file.type};base64,${Buffer.from(bytes).toString('base64')}`;
-  const base = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   const prompt = `请解析这张俯视、正交的室内户型平面图。图片原始尺寸是 ${width}×${height} 像素。只返回 JSON，不要 Markdown 或解释。
 坐标必须是原图像素，原点在左上角，x 向右、y 向下；不要换算成毫米，不要输出图外坐标。墙线用中心线端点表示，轻微倾斜的墙尽可能吸附到水平或垂直方向。识别房间多边形、门、入户门、窗和推拉门；无法确定的实体可以省略。confidence 是 0 到 1 的视觉置信度。承重墙只有图中明确标识时才标 bearing，不要自行推断承重。
 JSON 结构：{"walls":[{"x0":0,"y0":0,"x1":100,"y1":0,"kind":"partition","confidence":0.8}],"openings":[{"kind":"door","rect":[10,10,20,20],"confidence":0.7}],"rooms":[{"name":"客厅","poly":[[0,0],[100,0],[100,100],[0,100]],"confidence":0.8}]}`;
 
   try {
-    const response = await fetch(`${base}/chat/completions`, {
+    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey}` },
       signal: AbortSignal.timeout(90_000),
       body: JSON.stringify({
-        model,
+        model: provider.model,
         temperature: 0,
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: [

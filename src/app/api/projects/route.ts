@@ -4,11 +4,14 @@ import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
 import { planThumbSvg } from '@/core/thumbnail';
 import type { SceneDocument } from '@/core/types';
 import { SceneDocumentSchema } from '@/core/sceneSchema';
+import { getChatProviderConfig, getVisionProviderConfig } from '@/lib/aiProvider';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const chatProvider = getChatProviderConfig();
+  const visionEnabled = Boolean(getVisionProviderConfig());
   const projects = await prisma.project.findMany({
     orderBy: { updatedAt: 'desc' },
     include: {
@@ -35,7 +38,9 @@ export async function GET() {
         thumbSvg,
       };
     }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    aiMode: process.env.OPENAI_API_KEY ? 'llm' : 'rules',
+    aiMode: chatProvider ? 'llm' : 'rules',
+    aiProvider: chatProvider?.name ?? null,
+    visionEnabled,
   });
 }
 

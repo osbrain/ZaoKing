@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createProject, fetchProjects, type ProjectInfo, type ProjectTemplate } from '@/lib/api';
+import { createProject, fetchProjects, type AiProviderName, type ProjectInfo, type ProjectTemplate } from '@/lib/api';
 import FloorplanImportPanel from '@/features/floorplan-import/FloorplanImportPanel';
 import type { ImportReport } from '@/core/floorplanImport';
 import type { SceneDocument } from '@/core/types';
@@ -13,7 +13,8 @@ type NewProjectMode = ProjectTemplate | 'image';
 export default function HomePage() {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectInfo[] | null>(null);
-  const [aiMode, setAiMode] = useState<'llm' | 'rules'>('rules');
+  const [aiProvider, setAiProvider] = useState<AiProviderName | null>(null);
+  const [visionEnabled, setVisionEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /* 新建对话框状态 */
@@ -34,8 +35,9 @@ export default function HomePage() {
   useEffect(() => {
     (async () => {
       try {
-        const { projects: list, aiMode: m } = await fetchProjects();
-        setAiMode(m);
+        const { projects: list, aiProvider: provider, visionEnabled: canUseVision } = await fetchProjects();
+        setAiProvider(provider);
+        setVisionEnabled(canUseVision);
         setProjects(list);
       } catch (e) {
         setError(e instanceof Error ? e.message : '加载失败');
@@ -77,7 +79,7 @@ export default function HomePage() {
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             2D 户型 · 3D 场景 · AI 自然语言编辑
-            {aiMode === 'llm' ? ' · AI：大模型模式' : ' · AI：离线规则模式（配置 OPENAI_API_KEY 启用大模型）'}
+            {aiProvider === 'deepseek' ? ' · AI：DeepSeek 模式' : aiProvider === 'openai' ? ' · AI：OpenAI 模式' : ' · AI：离线规则模式（配置 DEEPSEEK_API_KEY 启用 DeepSeek）'}
           </p>
         </div>
         <button
@@ -181,7 +183,7 @@ export default function HomePage() {
               <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">上传现有平面图，识别墙体、房间和门窗后校准尺寸。</p>
             </button>
 
-            {template === 'image' && <FloorplanImportPanel projectName={name.trim() || '截图户型'} visionEnabled={aiMode === 'llm'} onDocumentChange={onImportDocumentChange} />}
+            {template === 'image' && <FloorplanImportPanel projectName={name.trim() || '截图户型'} visionEnabled={visionEnabled} onDocumentChange={onImportDocumentChange} />}
             {template === 'image' && importReport && (
               <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900">
                 已生成预览：{importReport.walls} 段墙、{importReport.openings} 个门窗、{importReport.rooms} 个房间。
