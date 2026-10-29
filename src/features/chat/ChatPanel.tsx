@@ -81,6 +81,15 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     if (element) element.scrollTop = element.scrollHeight;
   }, [messages, busy]);
 
+  useEffect(() => {
+    if (!showHistory) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowHistory(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [showHistory]);
+
   const refreshConversations = useCallback(async () => {
     const result = await fetchChatConversations(projectId);
     setConversations(result);
@@ -325,7 +334,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
   const persistenceText = persistence === 'loading' ? '读取中' : persistence === 'saving' ? '保存中' : persistence === 'error' ? '未保存' : '已保存';
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-100 px-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium text-ink">{activeConversation?.title ?? '新对话'}</p>
@@ -333,7 +342,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
         <span className={`text-[10px] ${persistence === 'error' ? 'text-red-600' : 'text-zinc-400'}`} title={persistenceError || '聊天记录会保留到手动删除'}>
           {persistenceText}
         </span>
-        <button type="button" onClick={() => setShowHistory((shown) => !shown)} disabled={busy || loadingConversation}
+        <button type="button" aria-expanded={showHistory} aria-controls="chat-history-panel" onClick={() => setShowHistory((shown) => !shown)} disabled={busy || loadingConversation}
           className={`rounded-md px-2 py-1 text-[11px] ${showHistory ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'} disabled:opacity-40`}>
           历史{conversations.length ? ` ${conversations.length}` : ''}
         </button>
