@@ -15,6 +15,7 @@ import { instanceGeometry, instanceRef, uid, type Asset, type ComponentInstance,
 import { docBBox, polyArea } from '@/core/geometry';
 import { dimensionLayout, dimsSvg, furnSVG, materialPatternId, openingsSvg, patternsDefs } from '@/core/symbols2d';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
+import OrientationCompass from '@/features/editor/OrientationCompass';
 
 const NOLABEL = ['plant', 'floorlamp', 'sidetable', 'barstool', 'beanbag', 'rug'];
 const GRID = 100; // 绘制吸附网格 mm
@@ -133,6 +134,8 @@ export default function PlanView() {
   const setCursor = useEditorStore((s) => s.setCursor);
   const tool = useEditorStore((s) => s.tool);
   const wallPreset = useEditorStore((s) => s.wallPreset);
+  const showGrid = useEditorStore((s) => s.showGrid);
+  const showOrientation = useEditorStore((s) => s.showOrientation);
   const showToast = useEditorStore((s) => s.showToast);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -479,6 +482,7 @@ export default function PlanView() {
         onPointerLeave={onSvgLeave}
       >
         <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) }} />
+        {showGrid && <rect x={camera.cx - vw / 2} y={camera.cy - vh / 2} width={vw} height={vh} fill="url(#p-grid)" pointerEvents="none" />}
         <RoomsLayer level={level} selection={selection} onSelect={select} interactive={selecting} />
         <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting} />
         <g dangerouslySetInnerHTML={{ __html: openingsSvg(level) }} pointerEvents="none" />
@@ -557,7 +561,19 @@ export default function PlanView() {
             ))}
           </div>
         )}
+        <div className="mt-1 flex flex-col gap-0.5 border-t border-zinc-100 pt-1">
+          <button type="button" aria-pressed={showGrid} onClick={() => useEditorStore.getState().toggleGrid()}
+            className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showGrid ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
+            方格 {showGrid ? '开' : '关'}
+          </button>
+          <button type="button" aria-pressed={showOrientation} onClick={() => useEditorStore.getState().toggleOrientation()}
+            className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showOrientation ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
+            北向 {showOrientation ? '开' : '关'}
+          </button>
+        </div>
       </div>
+
+      {showOrientation && <div className="pointer-events-none absolute right-14 top-3"><OrientationCompass /></div>}
 
       {/* 比例尺 */}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-zinc-200 bg-white/90 px-3 py-1.5 text-xs">

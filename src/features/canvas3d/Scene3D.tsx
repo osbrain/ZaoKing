@@ -2,9 +2,9 @@
 
 /* Detailed prototype models with live document geometry and editor selection.
  * Plan x maps to x, plan y to -z; all rendered distances use metres. */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { useSceneStore } from '@/stores/sceneStore';
@@ -15,6 +15,7 @@ import { docBBox } from '@/core/geometry';
 import { buildWallSolids } from '@/core/wallGeometry';
 import { createModelFactory, disposeModelGeometry } from './modelFactory';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
+import OrientationCompass from '@/features/editor/OrientationCompass';
 
 type ModelFactory = ReturnType<typeof createModelFactory>;
 
@@ -226,6 +227,22 @@ function Rig({ level }: { level: Level }) {
   return null;
 }
 
+function NorthBearing({ arrowRef }: { arrowRef: RefObject<SVGGElement> }) {
+  const { camera } = useThree();
+  const north = useMemo(() => new THREE.Vector3(0, 0, 1), []);
+  const northInCameraSpace = useMemo(() => new THREE.Vector3(), []);
+  const inverseCameraRotation = useMemo(() => new THREE.Quaternion(), []);
+  useFrame(() => {
+    const arrow = arrowRef.current;
+    if (!arrow) return;
+    northInCameraSpace.copy(north).applyQuaternion(inverseCameraRotation.copy(camera.quaternion).invert());
+    const angle = Math.atan2(northInCameraSpace.x, -northInCameraSpace.y) * 180 / Math.PI;
+    arrow.setAttribute('transform', `rotate(${angle} 20 20)`);
+    arrow.setAttribute('opacity', Math.hypot(northInCameraSpace.x, northInCameraSpace.y) < 0.08 ? '0.35' : '1');
+  });
+  return null;
+}
+
 function Lighting({ level, hour }: { level: Level; hour: number }) {
   const { gl } = useThree();
   const sun = useRef<THREE.DirectionalLight>(null);
@@ -249,7 +266,7 @@ function Lighting({ level, hour }: { level: Level; hour: number }) {
   </>;
 }
 
-function DetailedScene({ level, assets, materials, cutHeight, labels, hour }: { level: Level; assets?: readonly Asset[]; materials: readonly Material[]; cutHeight: number; labels: boolean; hour: number }) {
+function DetailedScene({ level, assets, materials, cutHeight, labels, hour, showGrid, arrowRef }: { level: Level; assets?: readonly Asset[]; materials: readonly Material[]; cutHeight: number; labels: boolean; hour: number; showGrid: boolean; arrowRef: RefObject<SVGGElement> }) {
   const { gl, scene } = useThree();
   const [models, setModels] = useState<ModelFactory | null>(null);
   useEffect(() => {
@@ -271,6 +288,12 @@ function DetailedScene({ level, assets, materials, cutHeight, labels, hour }: { 
       <planeGeometry args={[160, 160]} />
       <meshStandardMaterial color="#e4e0d7" roughness={1} />
     </mesh>
+    {showGrid && (() => {
+      const span = Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0) / 1000;
+      const gridSize = Math.max(10, Math.ceil(span / 2) * 2);
+      return <gridHelper args={[gridSize, gridSize * 2, '#bdb7ad', '#dedad2']}
+        position={[(bb.x0 + bb.x1) / 2000, 0.002, -(bb.y0 + bb.y1) / 2000]} />;
+    })()}
     {models && <>
       {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} materials={materials} />)}
       {level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} asset={assetById(inst.assetId, assets)} />)}
@@ -278,6 +301,7 @@ function DetailedScene({ level, assets, materials, cutHeight, labels, hour }: { 
     <Architecture level={level} cutHeight={cutHeight} />
     {labels && <RoomLabels level={level} />}
     <OrbitControls makeDefault enableDamping dampingFactor={0.08} maxPolarAngle={Math.PI * 0.495} minDistance={1.2} maxDistance={120} />
+    <NorthBearing arrowRef={arrowRef} />
     <Rig level={level} />
   </>;
 }
@@ -288,6 +312,11 @@ export default function Scene3D() {
   const materials = useMemo(() => doc ? documentMaterials(doc) : [], [doc?.materialSnapshots]);
   const select = useEditorStore(s => s.select);
   const setPreset3d = useEditorStore(s => s.setPreset3d);
+  const showGrid = useEditorStore(s => s.showGrid);
+  const showOrientation = useEditorStore(s => s.showOrientation);
+  const toggleGrid = useEditorStore(s => s.toggleGrid);
+  const toggleOrientation = useEditorStore(s => s.toggleOrientation);
+  const northArrowRef = useRef<SVGGElement>(null);
   const [cutHeight, setCutHeight] = useState(2800);
   const [labels, setLabels] = useState(true);
   const [hour, setHour] = useState(10);
@@ -300,11 +329,15 @@ export default function Scene3D() {
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
-        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels} hour={hour} />
+        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels} hour={hour} showGrid={showGrid} arrowRef={northArrowRef} />
       </Canvas>
       <div className="absolute right-3 top-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-1 rounded-xl border border-stone-200 bg-white/95 p-1 shadow-sm backdrop-blur-sm">
+        {showOrientation && <OrientationCompass arrowRef={northArrowRef} />}
         <button className={button} onClick={() => setPreset3d('iso')}>鸟瞰</button>
         <button className={button} onClick={() => setPreset3d('top')}>俯视</button>
+        <span className="mx-1 h-4 w-px bg-stone-200" />
+        <button type="button" aria-pressed={showGrid} className={button + (showGrid ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={toggleGrid}>方格</button>
+        <button type="button" aria-pressed={showOrientation} className={button + (showOrientation ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={toggleOrientation}>北向</button>
         <span className="mx-1 h-4 w-px bg-stone-200" />
         {[[2800, '全高'], [1200, '半墙'], [300, '低墙']].map(([height, title]) => (
           <button key={height} className={button + (cutHeight === height ? ' bg-stone-800 text-white hover:bg-stone-700' : '')}

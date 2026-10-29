@@ -25,6 +25,8 @@ interface EditorState {
   rightTab: 'props' | 'ai' | 'stats';
   toast: string | null;
   preset3d: { kind: 'iso' | 'top'; n: number };
+  showGrid: boolean;
+  showOrientation: boolean;
 
   setViewMode: (m: '2d' | '3d') => void;
   setCamera: (c: Camera) => void;
@@ -35,6 +37,8 @@ interface EditorState {
   setRightTab: (t: EditorState['rightTab']) => void;
   showToast: (msg: string) => void;
   setPreset3d: (kind: 'iso' | 'top') => void;
+  toggleGrid: () => void;
+  toggleOrientation: () => void;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -47,6 +51,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   rightTab: 'props',
   toast: null,
   preset3d: { kind: 'iso', n: 0 },
+  showGrid: true,
+  showOrientation: true,
 
   setViewMode: (m) => set({ viewMode: m }),
   setCamera: (c) => set({ camera: c }),
@@ -65,4 +71,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }, 2600);
   },
   setPreset3d: (kind) => set({ preset3d: { kind, n: get().preset3d.n + 1 } }),
+  toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
+  toggleOrientation: () => set((state) => ({ showOrientation: !state.showOrientation })),
 }));
