@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftToDocument, FloorPlanPixelDraftSchema, pixelDraftToMmDraft, type FloorPlanDraft } from './floorplanImport';
+import { draftToDocument, FloorPlanPixelDraftSchema, pixelDraftToMmDraft, type FloorPlanDraft } from '@/core/floorplanImport';
 
 const D = (o: Partial<FloorPlanDraft>): FloorPlanDraft => ({ walls: [], openings: [], rooms: [], ...o });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getChatProviderConfig, getVisionProviderConfig } from './aiProvider';
+import { getChatProviderConfig, getVisionProviderConfig } from '@/lib/aiProvider';
 
 describe('AI provider configuration', () => {
   it('prefers DeepSeek and applies its defaults', () => {

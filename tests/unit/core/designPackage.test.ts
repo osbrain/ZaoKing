@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { applyCmds } from './commands';
-import { createDesignPackage, DESIGN_PACKAGE_FORMAT, MAX_DESIGN_PACKAGE_BYTES, parseDesignPackage, serializeDesignPackage } from './designPackage';
-import { buildBlankDocument, buildSeedDocument } from './seed';
-import { SceneDocumentSchema } from './sceneSchema';
-import { assetById, materialById } from './assets';
-import { executeOps } from './ops';
+import { applyCmds } from '@/core/commands';
+import { createDesignPackage, DESIGN_PACKAGE_FORMAT, MAX_DESIGN_PACKAGE_BYTES, parseDesignPackage, serializeDesignPackage } from '@/core/designPackage';
+import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
+import { SceneDocumentSchema } from '@/core/sceneSchema';
+import { assetById, materialById } from '@/core/assets';
+import { executeOps } from '@/core/ops';
 
 describe('portable design packages', () => {
   it('round-trips room layout, used asset definitions, and material render parameters', () => {

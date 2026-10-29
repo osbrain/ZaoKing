@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAiToolCalls } from './aiTools';
+import { parseAiToolCalls } from '@/core/aiTools';
 
 describe('parseAiToolCalls', () => {
   it('preserves level and instance IDs plus numeric edit parameters', () => {

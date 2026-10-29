@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyCmds } from './commands';
-import { buildBlankDocument } from './seed';
+import { applyCmds } from '@/core/commands';
+import { buildBlankDocument } from '@/core/seed';
 
 describe('level-scoped commands', () => {
   it('preserves the current single-level command API', () => {

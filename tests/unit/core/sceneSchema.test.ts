@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildBlankDocument, buildSeedDocument } from './seed';
-import { SceneDocumentSchema } from './sceneSchema';
+import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
+import { SceneDocumentSchema } from '@/core/sceneSchema';
 
 describe('SceneDocumentSchema', () => {
   it('accepts blank and seeded documents', () => {

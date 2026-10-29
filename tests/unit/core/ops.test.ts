@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { executeOps } from './ops';
-import { buildBlankDocument, buildSeedDocument } from './seed';
-import { resolveAssetByQuery } from './assets';
-import type { SceneDocument } from './types';
+import { executeOps } from '@/core/ops';
+import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
+import { resolveAssetByQuery } from '@/core/assets';
+import type { SceneDocument } from '@/core/types';
 
 function sofaDocument(): SceneDocument {
   const document = buildBlankDocument();

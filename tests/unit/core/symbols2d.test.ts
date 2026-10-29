@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dimensionLayout, dimsSvg, materialPatternId } from './symbols2d';
-import type { Level } from './types';
+import { dimensionLayout, dimsSvg, materialPatternId } from '@/core/symbols2d';
+import type { Level } from '@/core/types';
 
 const level: Level = {
   id: 'lv1', name: '一层', elevation: 0,
