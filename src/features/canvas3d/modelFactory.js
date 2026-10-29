@@ -351,6 +351,30 @@ function buildFurniture(f){
       }
       break;
     }
+    case 'bunkbed': {
+      const h = M(f.h), frame = woodM('#806955'), mattress = fabric(c);
+      const lowerY = Math.min(.28, h*.2), upperY = Math.min(h*.58, 1.12), post = .055;
+      [-1, 1].forEach(xSide => [-1, 1].forEach(zSide => {
+        g.add(rbox(post, h, post, frame, xSide*(w/2 - post/2), 0, zSide*(d/2 - post/2), .01));
+      }));
+      [[lowerY, false], [upperY, true]].forEach(([baseY, upper]) => {
+        g.add(box(w - .06, .07, d - .07, frame, 0, baseY, 0));
+        g.add(rbox(w - .13, .14, d - .15, mattress, 0, baseY + .07, 0, .025));
+        g.add(rbox(w*.48, .065, .24, fabric('#e5dfd5'), 0, baseY + .21, bz + .18, .02));
+        if (upper) {
+          g.add(rbox(.035, .18, d*.88, frame, -w/2 + .03, baseY + .21, 0, .01), rbox(.035, .18, d*.88, frame, w/2 - .03, baseY + .21, 0, .01));
+          g.add(rbox(w*.88, .18, .035, frame, 0, baseY + .21, bz + .03, .01));
+        }
+      });
+      const ladderX = w*.28, ladderZ = d/2 - .04, ladderBottom = lowerY + .2, ladderTop = upperY + .3;
+      rod([ladderX - .14, ladderBottom, ladderZ], [ladderX - .1, ladderTop, ladderZ], .015, frame, .015, 10);
+      rod([ladderX + .14, ladderBottom, ladderZ], [ladderX + .1, ladderTop, ladderZ], .015, frame, .015, 10);
+      for (let rung = 1; rung <= 4; rung++) {
+        const y = ladderBottom + (ladderTop - ladderBottom)*rung/5;
+        g.add(box(.25, .025, .025, frame, ladderX, y, ladderZ));
+      }
+      break;
+    }
     case 'sofa': case 'armchair': {
       const fab = fabric(c), dk = fabric(darker(c, .88)), a = Math.min(.18, w*.14), n = f.type === 'armchair' ? 1 : (w > 2.2 ? 3 : 2), cw = (w - 2*a)/n, bd = Math.min(.2, d*.24), lh = .12, sd = d - bd - .02;
       legs(g, w, d, lh, woodM('#3a3027'), .07, .018);
@@ -584,16 +608,34 @@ function buildFurniture(f){
       g.add(rot(box(.012, .012, .09, cm, fx + .035, .98, bz + .09), -.3));
       break;
     }
-    case 'fridge': {
-      const fm = mat(c, {metalness:.45, roughness:.28}), h = 1.8, fz = d/2 - .05;
+    case 'fridge': case 'fridgeSingle': case 'fridge4': {
+      const fm = mat(c, {metalness:.45, roughness:.28}), h = M(f.h), fz = d/2 - .076;
       g.add(box(w - .02, .06, d - .06, '#2a2c2e', 0, 0, -.03), rbox(w, h - .06, d - .05, fm, 0, .06, -.025, .02), box(w - .01, h - .07, .003, '#2a2c2e', 0, .065, fz + .0015));
-      if (w > .85){
-        [-1, 1].forEach(s => { g.add(rbox(w/2 - .004, h - .08, .04, fm, s*w/4, .07, fz + .023, .012)); pull(g, .8, true, s*.035, 1.05, fz + .043); });
-        g.add(box(.1, .14, .003, screenMat('#2a6f8f'), -w/4, 1.25, fz + .044));
+      if (f.type === 'fridgeSingle') {
+        const doorH = h - .14;
+        g.add(rbox(w - .006, doorH, .04, fm, 0, .07, fz + .023, .012));
+        pull(g, Math.min(.48, doorH*.35), true, w/2 - .06, .07 + doorH*.54, fz + .043);
+        g.add(box(w*.8, .006, .003, '#7c858a', 0, .07 + doorH*.29, fz + .045));
+        g.add(box(.075, .11, .003, screenMat('#2a6f8f'), -w*.2, .07 + doorH*.8, fz + .044));
+      } else if (f.type === 'fridge4') {
+        const bottomY = .07, lowerH = h*.28, upperY = bottomY + lowerH + .025, upperH = h - upperY - .08;
+        [-1, 1].forEach(s => {
+          g.add(rbox(w/2 - .012, upperH, .04, fm, s*w/4, upperY, fz + .023, .012));
+          g.add(rbox(w/2 - .012, lowerH, .04, fm, s*w/4, bottomY, fz + .023, .012));
+          pull(g, Math.min(.42, upperH*.42), true, s*.025, upperY + upperH*.48, fz + .043);
+          pull(g, w*.18, false, s*w/4, bottomY + lowerH*.62, fz + .043);
+        });
+        g.add(box(.075, .11, .003, screenMat('#2a6f8f'), -w/4, upperY + upperH*.76, fz + .044));
+      } else if (w > .85){
+        const doorH = h - .14, handleY = .07 + doorH*.56;
+        [-1, 1].forEach(s => { g.add(rbox(w/2 - .004, doorH, .04, fm, s*w/4, .07, fz + .023, .012)); pull(g, Math.min(.8, doorH*.48), true, s*.035, handleY, fz + .043); });
+        g.add(box(.1, .14, .003, screenMat('#2a6f8f'), -w/4, .07 + doorH*.76, fz + .044));
       } else {
-        g.add(rbox(w - .006, 1.06, .04, fm, 0, .72, fz + .023, .012), rbox(w - .006, .64, .04, fm, 0, .07, fz + .023, .012));
-        pull(g, .5, true, -w/2 + .06, 1.05, fz + .043); pull(g, w*.5, false, 0, .64, fz + .043);
-        g.add(box(.08, .1, .003, screenMat('#2a6f8f'), w*.22, 1.4, fz + .044));
+        const bottomY = .07, lowerH = h*.31, upperY = bottomY + lowerH + .025, upperH = h - upperY - .08;
+        g.add(rbox(w - .006, upperH, .04, fm, 0, upperY, fz + .023, .012), rbox(w - .006, lowerH, .04, fm, 0, bottomY, fz + .023, .012));
+        pull(g, Math.min(.5, upperH*.42), true, -w/2 + .06, upperY + upperH*.5, fz + .043);
+        pull(g, w*.5, false, 0, bottomY + lowerH*.62, fz + .043);
+        g.add(box(.08, .1, .003, screenMat('#2a6f8f'), w*.22, upperY + upperH*.72, fz + .044));
       }
       break;
     }

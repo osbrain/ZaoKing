@@ -89,6 +89,15 @@ export function furnSVG(t: string, w: number, d: number, c: string, geometry?: A
       s += pa(`M${x + w - 15 - Math.min(420, w * 0.3)} ${by}L${x + w - 15} ${by}L${x + w - 15} ${by + Math.min(420, w * 0.3)}Z`, shade(c, 1.12));
       return s;
     }
+    case 'bunkbed': {
+      let s = rc(x, y, w, d, '#8d7258', 'rx="30"') + rc(x + 65, y + 70, w - 130, d - 140, c, 'rx="28"');
+      s += rc(x + 90, y + 100, w - 180, 90, '#fbf8f2', 'rx="24"');
+      for (let rung = 0; rung < 4; rung++) {
+        const ry = y + d * 0.42 + rung * Math.min(90, d * 0.045);
+        s += ln(x + w - 210, ry, x + w - 70, ry);
+      }
+      return s;
+    }
     case 'sofa':
     case 'armchair': {
       const b = d * 0.24;
@@ -162,6 +171,10 @@ export function furnSVG(t: string, w: number, d: number, c: string, geometry?: A
       return rc(x, y, w, d, c, 'rx="20"') + rc(x + w * 0.06, y + d * 0.18, w * 0.42, d * 0.66, '#fff', 'rx="50"') + rc(x + w * 0.52, y + d * 0.18, w * 0.42, d * 0.66, '#fff', 'rx="50"') + `<circle cx="0" cy="${y + d * 0.09}" r="22" fill="#999"/>`;
     case 'fridge':
       return rc(x, y, w, d, c, 'rx="30"') + ln(x, y + d * 0.14, x + w, y + d * 0.14) + ln(0, y + d * 0.14, 0, y + d) + rc(-70, y + d * 0.5, 40, d * 0.25, '#aab') + rc(30, y + d * 0.5, 40, d * 0.25, '#aab');
+    case 'fridgeSingle':
+      return rc(x, y, w, d, c, 'rx="30"') + ln(x, y, x + w, y) + rc(x + w - 90, y + d * 0.3, 45, d * 0.22, '#718d99');
+    case 'fridge4':
+      return rc(x, y, w, d, c, 'rx="30"') + ln(x, y + d * 0.14, x + w, y + d * 0.14) + ln(0, y + d * 0.14, 0, y + d) + ln(x, y + d * 0.57, x + w, y + d * 0.57) + rc(-70, y + d * 0.3, 40, d * 0.18, '#718d99') + rc(30, y + d * 0.3, 40, d * 0.18, '#718d99');
     case 'toilet':
       return rc(x + w * 0.04, y, w * 0.92, d * 0.27, c, 'rx="30"') + ec(0, y + d * 0.27 + d * 0.36, w * 0.47, d * 0.36, c) + ec(0, y + d * 0.27 + d * 0.4, w * 0.3, d * 0.24, '#eef4f7');
     case 'vanity':

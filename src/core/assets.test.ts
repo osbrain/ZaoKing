@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { assetById, resolveAssetByQuery } from './assets';
+import { assetById, CATALOG, resolveAssetByQuery } from './assets';
 import { applyCmds } from './commands';
 import { buildBlankDocument } from './seed';
 import { instanceRef, type CustomAsset } from './types';
@@ -68,9 +68,55 @@ describe('project component definitions', () => {
     const outcome = executeOps(document, [{ op: 'add_component', query: '定制玄关柜' }]);
     expect(outcome.cmds[0]).toMatchObject({ type: 'place', inst: { assetId: asset.id } });
   });
+
+  it.each([
+    ['双层单人床', 'bed-bunk-1000x2000', '儿童房'],
+    ['四门冰箱', 'fridge-cross-door-500l', '厨房'],
+  ])('lets AI place the requested catalog variant: %s', (query, assetId, roomName) => {
+    const document = buildBlankDocument();
+    document.levels[0].rooms = [{
+      id: 'target-room', name: roomName, floorMaterialId: 'wood',
+      poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]],
+    }];
+
+    const outcome = executeOps(document, [{ op: 'add_component', room: roomName, query }]);
+    expect(outcome.cmds[0]).toMatchObject({
+      type: 'place',
+      inst: { assetId, size: { w: expect.any(Number), d: expect.any(Number) } },
+    });
+  });
 });
 
 describe('declarative component rendering', () => {
+  it('offers searchable size and style variants without duplicate asset IDs', () => {
+    expect(CATALOG.length).toBeGreaterThanOrEqual(80);
+    expect(new Set(CATALOG.map((item) => item.id)).size).toBe(CATALOG.length);
+    expect(resolveAssetByQuery('1.8米床')?.id).toBe('a0_0');
+    expect(resolveAssetByQuery('双层单人床')?.id).toBe('bed-bunk-1000x2000');
+    expect(resolveAssetByQuery('四门冰箱')?.id).toBe('fridge-cross-door-500l');
+    expect(resolveAssetByQuery('嵌入式冰箱')?.id).toBe('fridge-built-in-450l');
+  });
+
+  it.each(['bed-bunk-1000x2000', 'fridge-single-300l', 'fridge-side-by-side-600l', 'fridge-cross-door-500l', 'fridge-french-door-600l', 'fridge-built-in-450l'])(
+    'renders %s at its declared 3D dimensions', id => {
+      const definition = assetById(id);
+      expect(definition).toBeDefined();
+      const environment = new THREE.Texture();
+      const factory = createModelFactory(environment);
+      const object = factory.buildFurniture({ ...definition!, cx: 0, cy: 0, rot: 0 });
+      const bounds = new THREE.Box3().setFromObject(object);
+      const size = bounds.getSize(new THREE.Vector3());
+      expect(size.x).toBeCloseTo(definition!.w / 1000, 3);
+      expect(size.y).toBeCloseTo(definition!.h / 1000, 3);
+      expect(size.z).toBeCloseTo(definition!.d / 1000, 3);
+      expect(bounds.min.y).toBeCloseTo(0, 3);
+      expect(furnSVG(definition!.type, definition!.w, definition!.d, definition!.color)).not.toBe('');
+      disposeModelGeometry(object);
+      factory.dispose();
+      environment.dispose();
+    },
+  );
+
   it('renders an ellipse in 2D and sanitizes color attributes', () => {
     expect(furnSVG('custom', 1200, 400, asset.color, { shape: 'cylinder' })).toContain('rx="576" ry="192"');
     expect(furnSVG('custom', 1200, 400, '" onload="alert(1)', { shape: 'box' })).not.toContain('onload');
