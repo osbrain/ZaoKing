@@ -47,10 +47,18 @@ export default function AssetEditor({ asset, onSave, onCancel }: {
   const numericParameter = (key: keyof typeof parameters, label: string, min: number, max: number) => (
     <label key={key} className="text-[11px] text-zinc-500">{label}
       <input type="number" min={min} max={max} step={1} value={parameters[key] ?? min}
-        onChange={event => setParameters(current => ({ ...current, [key]: event.target.value === '' ? undefined : Number(event.target.value) }))}
+        onChange={event => setParameters(current => {
+          const value = event.target.value === '' ? undefined : Number(event.target.value);
+          const next = { ...current, [key]: value };
+          if (key === 'compartments' && value !== undefined && next.openCompartments !== undefined) {
+            next.openCompartments = Math.min(next.openCompartments, value);
+          }
+          return next;
+        })}
         className={fieldClass} />
     </label>
   );
+  const cabinetShapes = ['cabinet', 'wallCabinet', 'wardrobe', 'tvConsole', 'kitchenIsland'].includes(shape);
   return (
     <form onSubmit={submit} className="space-y-3 p-3" aria-label={asset ? '编辑自定义组件' : '新建自定义组件'}>
       <div className="flex items-center justify-between">
@@ -84,8 +92,9 @@ export default function AssetEditor({ asset, onSave, onCancel }: {
       {Object.keys(parameters).length > 0 && <fieldset className="space-y-2 rounded-md border border-zinc-200 p-2">
         <legend className="px-1 text-[11px] text-zinc-500">结构参数</legend>
         <div className="grid grid-cols-2 gap-2">
-          {['cabinet', 'wardrobe', 'bookcase', 'kitchenIsland'].includes(shape) && numericParameter('compartments', '分格数量', 1, 8)}
-          {['bookcase'].includes(shape) && numericParameter('shelves', '层板数量', 0, 12)}
+          {['cabinet', 'wallCabinet', 'wardrobe', 'bookcase', 'tvConsole', 'kitchenIsland'].includes(shape) && numericParameter('compartments', '分区数量', 1, 8)}
+          {cabinetShapes && numericParameter('openCompartments', '开放格数量（从左起）', 0, parameters.compartments ?? 8)}
+          {(cabinetShapes || shape === 'bookcase') && numericParameter('shelves', cabinetShapes ? '每个开放格层板数' : '层板数量', 0, 12)}
           {['dresser', 'vanity'].includes(shape) && numericParameter('drawers', '抽屉数量', 1, 8)}
           {shape === 'sofa' && numericParameter('seats', '座位数量', 1, 5)}
         </div>

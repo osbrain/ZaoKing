@@ -24,7 +24,7 @@ export type DesignOp =
   | { op: 'delete_component'; levelId?: string; room?: string; target?: string; instanceId?: string }
   | { op: 'move_component'; levelId?: string; room?: string; target?: string; instanceId?: string; dxMm?: number; dyMm?: number; rotationDeltaDeg?: number }
   | { op: 'resize_component'; levelId?: string; room?: string; target?: string; instanceId?: string; widthMm?: number; depthMm?: number; heightMm?: number }
-  | { op: 'set_component_parameters'; levelId?: string; room?: string; target?: string; instanceId?: string; compartments?: number; shelves?: number; drawers?: number; seats?: number }
+  | { op: 'set_component_parameters'; levelId?: string; room?: string; target?: string; instanceId?: string; compartments?: number; openCompartments?: number; shelves?: number; drawers?: number; seats?: number }
   | { op: 'set_component_color'; levelId?: string; room?: string; target?: string; instanceId?: string; query: string }
   | { op: 'set_wall_color'; levelId?: string; room?: string; wallId?: string; query: string }
   | { op: 'set_floor_material'; levelId?: string; room?: string; query: string }
@@ -252,14 +252,18 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         const asset = assetById(inst.assetId, assets);
         const supported = asset?.geometry?.parameters ?? {};
         const parameters: NonNullable<ComponentInstance['parameters']> = {};
-        for (const key of ['compartments', 'shelves', 'drawers', 'seats'] as const) {
+        for (const key of ['compartments', 'openCompartments', 'shelves', 'drawers', 'seats'] as const) {
           const value = op[key];
           if (value === undefined) continue;
           const allowed = supported[key];
           if (allowed === undefined) { log.push(`⚠「${asset?.name ?? '该组件'}」不支持修改${key}`); continue; }
-          const min = key === 'shelves' ? 0 : 1;
-          const max = key === 'seats' ? 5 : key === 'compartments' || key === 'drawers' ? 8 : 12;
+          const min = key === 'shelves' || key === 'openCompartments' ? 0 : 1;
+          const max = key === 'seats' ? 5 : key === 'shelves' ? 12 : 8;
           if (!Number.isInteger(value) || value < min || value > max) { log.push(`⚠ ${key} 必须是 ${min}–${max} 的整数`); continue; }
+          const totalCompartments = op.compartments ?? inst.parameters?.compartments ?? supported.compartments;
+          if (key === 'openCompartments' && totalCompartments !== undefined && value > totalCompartments) {
+            log.push(`⚠ 开放格数量不能超过分区数量（${totalCompartments}）`); continue;
+          }
           parameters[key] = value;
         }
         if (!Object.keys(parameters).length) break;

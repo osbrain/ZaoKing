@@ -31,4 +31,15 @@ describe('parseAiToolCalls', () => {
       instanceId: 'shelf-1', shelves: 7,
     }]);
   });
+
+  it('parses parameterized cabinet open-bay edits', () => {
+    const ops = parseAiToolCalls([{ function: {
+      name: 'set_component_parameters',
+      arguments: JSON.stringify({ room: '客厅', target: '电视柜', openCompartments: 2, shelves: 1 }),
+    } }]);
+    expect(ops).toEqual([{
+      op: 'set_component_parameters', levelId: undefined, room: '客厅', target: '电视柜',
+      instanceId: undefined, openCompartments: 2, shelves: 1,
+    }]);
+  });
 });

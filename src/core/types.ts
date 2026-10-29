@@ -117,7 +117,7 @@ export type CustomFinish = 'wood' | 'paint' | 'fabric' | 'metal' | 'ceramic' | '
 export interface CustomGeometry {
   shape: CustomShape;
   finish?: CustomFinish;
-  parameters?: { compartments?: number; shelves?: number; drawers?: number; seats?: number };
+  parameters?: { compartments?: number; openCompartments?: number; shelves?: number; drawers?: number; seats?: number };
 }
 
 export interface CustomAsset extends Asset {

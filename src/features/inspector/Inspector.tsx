@@ -69,6 +69,7 @@ export function PropsPanel() {
     const asset = assetById(inst.assetId, assets);
     const ref = instanceRef(inst, asset);
     const customParameters = asset?.geometry?.parameters;
+    const instanceCompartments = inst.parameters?.compartments ?? customParameters?.compartments ?? 8;
     return (
       <div className="space-y-4 p-4">
         <div>
@@ -97,7 +98,7 @@ export function PropsPanel() {
         {asset?.type === 'custom' && customParameters && Object.keys(customParameters).length > 0 && (
           <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3">
             {([
-              ['compartments', '分格数量', 1, 8], ['shelves', '层板数量', 0, 12],
+              ['compartments', '分区数量', 1, 8], ['openCompartments', '开放格数量', 0, instanceCompartments], ['shelves', '层板数量', 0, 12],
               ['drawers', '抽屉数量', 1, 8], ['seats', '座位数量', 1, 5],
             ] as const).filter(([key]) => customParameters[key] !== undefined).map(([key, label, min, max]) => (
               <NumberField key={key} min={min} max={max} label={label}

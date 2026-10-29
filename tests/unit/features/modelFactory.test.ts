@@ -92,4 +92,54 @@ describe('3D furniture model factory', () => {
     factory.dispose();
     environment.dispose();
   });
+
+  it('builds configurable open cabinet bays with shelves inside declared dimensions', () => {
+    const environment = new THREE.Texture();
+    const factory = createModelFactory(environment);
+    const asset: CustomAsset = {
+      id: 'custom:open-cabinet', type: 'custom', name: '开放格地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', finish: 'wood', parameters: { compartments: 3, openCompartments: 0, shelves: 0 } },
+    };
+    const closed = factory.buildFurniture({ ...asset, ...asset.geometry, cx: 0, cy: 0, rot: 0 });
+    const open = factory.buildFurniture({
+      ...asset, ...asset.geometry, parameters: { compartments: 3, openCompartments: 1, shelves: 4 }, cx: 0, cy: 0, rot: 0,
+    });
+    const openDetails = open.children[0];
+    const closedDetails = closed.children[0];
+    const bounds = new THREE.Box3().setFromObject(open);
+    const size = bounds.getSize(new THREE.Vector3());
+
+    expect(openDetails.children.length).toBeGreaterThan(closedDetails.children.length);
+    expect(size.x).toBeCloseTo(1.8, 3);
+    expect(size.y).toBeCloseTo(0.9, 3);
+    expect(size.z).toBeCloseTo(0.6, 3);
+    expect(bounds.min.y).toBeCloseTo(0, 3);
+
+    disposeModelGeometry(closed);
+    disposeModelGeometry(open);
+    factory.dispose();
+    environment.dispose();
+  });
+
+  it('keeps cabinet internals inside minimum-size asset dimensions', () => {
+    const environment = new THREE.Texture();
+    const factory = createModelFactory(environment);
+    const asset: CustomAsset = {
+      id: 'custom:tiny-cabinet', type: 'custom', name: '窄柜', category: '餐厨',
+      w: 10, d: 10, h: 10, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', finish: 'wood', parameters: { compartments: 8, openCompartments: 8, shelves: 12 } },
+    };
+    const model = factory.buildFurniture({ ...asset, ...asset.geometry, cx: 0, cy: 0, rot: 0 });
+    const bounds = new THREE.Box3().setFromObject(model);
+    const size = bounds.getSize(new THREE.Vector3());
+
+    expect(size.x).toBeLessThanOrEqual(.010001);
+    expect(size.y).toBeLessThanOrEqual(.010001);
+    expect(size.z).toBeLessThanOrEqual(.010001);
+
+    disposeModelGeometry(model);
+    factory.dispose();
+    environment.dispose();
+  });
 });

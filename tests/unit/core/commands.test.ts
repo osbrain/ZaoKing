@@ -29,4 +29,33 @@ describe('level-scoped commands', () => {
     expect(updated.levels[0].walls).toHaveLength(0);
     expect(updated.levels[1].walls).toHaveLength(1);
   });
+
+  it('keeps open cabinet bays within the updated partition count', () => {
+    const document = buildBlankDocument();
+    document.levels[0].instances = [{
+      id: 'cabinet-1', assetId: 'cabinet', t: { x: 0, y: 0, rot: 0 },
+      parameters: { compartments: 4, openCompartments: 3 },
+    }];
+    const updated = applyCmds(document, [{
+      type: 'setParameters', id: 'cabinet-1', parameters: { compartments: 2 },
+    }]);
+    expect(updated.levels[0].instances[0].parameters).toEqual({ compartments: 2, openCompartments: 2 });
+  });
+
+  it('clamps inherited open cabinet bays when an instance overrides its partition count', () => {
+    const document = buildBlankDocument();
+    document.assets = [{
+      id: 'custom:cabinet', type: 'custom', name: '定制地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', parameters: { compartments: 3, openCompartments: 2 } },
+    }];
+    document.levels[0].instances = [{
+      id: 'cabinet-1', assetId: 'custom:cabinet', t: { x: 0, y: 0, rot: 0 },
+    }];
+    const updated = applyCmds(document, [{
+      type: 'setParameters', id: 'cabinet-1', parameters: { compartments: 1 },
+    }]);
+
+    expect(updated.levels[0].instances[0].parameters).toEqual({ compartments: 1, openCompartments: 1 });
+  });
 });

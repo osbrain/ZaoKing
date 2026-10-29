@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dimensionLayout, dimsSvg, materialPatternId } from '@/core/symbols2d';
+import { dimensionLayout, dimsSvg, furnSVG, materialPatternId } from '@/core/symbols2d';
 import type { Level } from '@/core/types';
 
 const level: Level = {
@@ -41,5 +41,25 @@ describe('2D dimensions', () => {
 describe('material SVG identifiers', () => {
   it('keeps distinct material IDs distinct after encoding', () => {
     expect(materialPatternId('vendor:oak')).not.toBe(materialPatternId('vendor_oak'));
+  });
+});
+
+describe('parameterized cabinet symbols', () => {
+  it('shows open bays and shelf divisions in the plan symbol', () => {
+    const svg = furnSVG('custom', 1200, 600, '#c9b89f', {
+      shape: 'cabinet', parameters: { compartments: 2, openCompartments: 1, shelves: 2 },
+    });
+    expect(svg).toContain('#f2e7d8');
+    expect(svg).toContain('stroke="none"');
+    expect(svg.match(/<line /g)).toHaveLength(3);
+  });
+
+  it('keeps cabinet openings positive for minimum-size assets', () => {
+    const svg = furnSVG('custom', 10, 10, '#c9b89f', {
+      shape: 'cabinet', parameters: { compartments: 8, openCompartments: 8, shelves: 12 },
+    });
+    const rectangleSizes = [...svg.matchAll(/<(?:rect)\b[^>]*\b(?:width|height)="([^"]+)"/g)]
+      .map((match) => Number(match[1]));
+    expect(rectangleSizes.every((size) => Number.isFinite(size) && size > 0)).toBe(true);
   });
 });

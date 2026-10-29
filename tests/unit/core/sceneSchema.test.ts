@@ -47,4 +47,51 @@ describe('SceneDocumentSchema', () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'color')).toBe(true);
   });
+
+  it('rejects cabinet open-bay counts greater than the partition count', () => {
+    const document = buildBlankDocument();
+    document.assets = [{
+      id: 'custom:cabinet', type: 'custom', name: '定制地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', parameters: { compartments: 3, openCompartments: 1, shelves: 2 } },
+    }];
+    document.levels[0].instances = [{
+      id: 'cabinet-1', assetId: 'custom:cabinet', t: { x: 0, y: 0, rot: 0 },
+      parameters: { openCompartments: 4 },
+    }];
+
+    const result = SceneDocumentSchema.safeParse(document);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'openCompartments')).toBe(true);
+  });
+
+  it('rejects an invalid open-bay count in the cabinet asset definition', () => {
+    const document = buildBlankDocument();
+    document.assets = [{
+      id: 'custom:cabinet', type: 'custom', name: '定制地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', parameters: { compartments: 2, openCompartments: 3 } },
+    }];
+
+    const result = SceneDocumentSchema.safeParse(document);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'openCompartments')).toBe(true);
+  });
+
+  it('validates effective cabinet parameters inherited from the asset', () => {
+    const document = buildBlankDocument();
+    document.assets = [{
+      id: 'custom:cabinet', type: 'custom', name: '定制地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', parameters: { compartments: 3, openCompartments: 2 } },
+    }];
+    document.levels[0].instances = [{
+      id: 'cabinet-1', assetId: 'custom:cabinet', t: { x: 0, y: 0, rot: 0 },
+      parameters: { compartments: 1 },
+    }];
+
+    const result = SceneDocumentSchema.safeParse(document);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'openCompartments')).toBe(true);
+  });
 });

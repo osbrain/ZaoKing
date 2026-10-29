@@ -74,6 +74,7 @@ const componentInstanceSchema = z.object({
     .refine((size) => size.w !== undefined || size.d !== undefined || size.h !== undefined, 'At least one size override is required').optional(),
   parameters: z.object({
     compartments: z.number().int().min(1).max(8).optional(),
+    openCompartments: z.number().int().min(0).max(8).optional(),
     shelves: z.number().int().min(0).max(12).optional(),
     drawers: z.number().int().min(1).max(8).optional(),
     seats: z.number().int().min(1).max(5).optional(),
@@ -110,9 +111,10 @@ export const SceneDocumentSchema = z.object({
   assetSnapshots: z.array(AssetDefinitionSchema).max(1000).optional(),
   materialSnapshots: z.array(MaterialSchema).max(1000).optional(),
 }).strict().superRefine((document, ctx) => {
-  const knownAssetIds = new Set(assetCatalog([
+  const knownAssets = assetCatalog([
     ...(document.assetSnapshots ?? []), ...(document.assets ?? []),
-  ]).map((asset) => asset.id));
+  ]);
+  const knownAssetIds = new Set(knownAssets.map((asset) => asset.id));
   const knownMaterialIds = new Set(materialCatalog(document.materialSnapshots).map((material) => material.id));
   const assetIds = new Set<string>();
   for (const collection of ['assets', 'assetSnapshots'] as const) {
@@ -142,6 +144,18 @@ export const SceneDocumentSchema = z.object({
     level.instances.forEach((instance, instanceIndex) => {
       if (!knownAssetIds.has(instance.assetId)) {
         ctx.addIssue({ path: ['levels', index, 'instances', instanceIndex, 'assetId'], code: z.ZodIssueCode.custom, message: 'Component asset does not exist in this document or the built-in catalog' });
+      }
+      if (instance.parameters) {
+        const asset = knownAssets.find((candidate) => candidate.id === instance.assetId);
+        const effectiveParameters = { ...asset?.geometry?.parameters, ...instance.parameters };
+        if (effectiveParameters.compartments !== undefined && effectiveParameters.openCompartments !== undefined
+          && effectiveParameters.openCompartments > effectiveParameters.compartments) {
+          ctx.addIssue({
+            path: ['levels', index, 'instances', instanceIndex, 'parameters', 'openCompartments'],
+            code: z.ZodIssueCode.custom,
+            message: 'Open compartments cannot exceed total compartments',
+          });
+        }
       }
     });
     level.rooms.forEach((room, roomIndex) => {

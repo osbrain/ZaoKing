@@ -244,10 +244,28 @@ function customPlanSvg(
     case 'cylinder': case 'roundTable': case 'planter':
       return ec(0, 0, w * .48, d * .48, color) + ec(0, 0, w * .42, d * .42, 'none');
     case 'cabinet': case 'wallCabinet': case 'wardrobe': case 'tvConsole': case 'kitchenIsland': {
-      const count = p.compartments ?? 2;
-      let s = rc(x, y, w, d, color, 'rx="18"') + rc(x + 45, y + 45, w - 90, d - 90, 'none', 'rx="10"');
-      for (let i = 1; i < count; i++) s += ln(x + w * i / count, y + 50, x + w * i / count, y + d - 50);
-      if (shape === 'wardrobe') for (let i = 0; i < count; i++) s += ec(x + w * (i + .83) / count, 0, 14, 14, '#807261');
+      const count = Math.max(1, Math.min(8, Math.floor(p.compartments ?? 2)));
+      const openCount = Math.max(0, Math.min(count, Math.floor(p.openCompartments ?? 0)));
+      const bodyInsetX = Math.min(45, w * .12);
+      const bodyInsetY = Math.min(45, d * .12);
+      let s = rc(x, y, w, d, color, 'rx="18"') + rc(x + bodyInsetX, y + bodyInsetY, w - bodyInsetX * 2, d - bodyInsetY * 2, 'none', 'rx="10"');
+      const partitionInsetY = Math.min(50, d * .12);
+      for (let i = 1; i < count; i++) s += ln(x + w * i / count, y + partitionInsetY, x + w * i / count, y + d - partitionInsetY);
+      for (let i = 0; i < openCount; i++) {
+        const bayX = x + w * i / count;
+        const bayW = w / count;
+        const insetX = Math.min(25, bayW * .12);
+        const insetY = Math.min(25, d * .12);
+        const openingX = bayX + insetX;
+        const openingRight = bayX + bayW - insetX;
+        s += rc(openingX, y + insetY, openingRight - openingX, d - insetY * 2, '#f2e7d8', 'stroke="none"');
+        const shelfCount = Math.max(0, Math.min(12, Math.floor(p.shelves ?? 0)));
+        for (let shelf = 1; shelf <= shelfCount; shelf++) {
+          const shelfY = y + insetY + (d - insetY * 2) * shelf / (shelfCount + 1);
+          s += ln(openingX, shelfY, openingRight, shelfY);
+        }
+      }
+      if (shape === 'wardrobe') for (let i = openCount; i < count; i++) s += ec(x + w * (i + .83) / count, 0, Math.min(14, w / count * .04), Math.min(14, d * .04), '#807261');
       if (shape === 'kitchenIsland') s += rc(x + w * .14, y + d * .2, w * .3, d * .24, '#9ca7a7', 'rx="35"') + ec(x + w * .68, y + d * .32, Math.min(w, d) * .08, Math.min(w, d) * .08, 'none');
       return s;
     }

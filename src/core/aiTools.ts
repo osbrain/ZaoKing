@@ -34,7 +34,7 @@ export function parseAiToolCalls(calls: unknown): DesignOp[] {
         case 'set_component_parameters': {
           if (!target && !instanceId) return [];
           const parameters = Object.fromEntries(
-            ['compartments', 'shelves', 'drawers', 'seats']
+            ['compartments', 'openCompartments', 'shelves', 'drawers', 'seats']
               .map((key) => [key, number(key)])
               .filter(([, value]) => value !== undefined),
           );

@@ -124,6 +124,22 @@ describe('level-aware design operations', () => {
     expect(outcome.log.some((line) => line.includes('不支持修改seats'))).toBe(true);
   });
 
+  it('supports setting open cabinet bays and rejects more open bays than partitions', () => {
+    const document = sofaDocument();
+    const level = document.levels[0];
+    document.assets = [{
+      id: 'custom:cabinet', type: 'custom', name: '定制地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: ['地柜'],
+      geometry: { shape: 'cabinet', parameters: { compartments: 3, openCompartments: 1, shelves: 2 } },
+    }];
+    level.instances = [{ id: 'cabinet-1', assetId: 'custom:cabinet', t: { x: 3000, y: 3000, rot: 0 } }];
+    const valid = executeOps(document, [{ op: 'set_component_parameters', instanceId: 'cabinet-1', openCompartments: 2 }]);
+    expect(valid.cmds).toEqual([{ levelId: 'lv1', type: 'setParameters', id: 'cabinet-1', parameters: { openCompartments: 2 } }]);
+    const invalid = executeOps(document, [{ op: 'set_component_parameters', instanceId: 'cabinet-1', openCompartments: 4 }]);
+    expect(invalid.cmds).toHaveLength(0);
+    expect(invalid.log[0]).toContain('开放格数量不能超过分区数量');
+  });
+
   it('maps dark color descriptions before their broader color names', () => {
     const document = buildBlankDocument();
     const level = document.levels[0];

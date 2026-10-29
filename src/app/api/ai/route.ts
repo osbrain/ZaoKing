@@ -157,12 +157,13 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_component_parameters',
-      description: '修改定制家具实例支持的结构参数，如柜体分格、书架层板、抽屉或沙发座位数量',
+      description: '修改定制家具实例支持的结构参数，如柜体分区、开放格、开放格层板、抽屉或沙发座位数量',
       parameters: {
         type: 'object',
         properties: {
           room: { type: 'string' }, levelId: { type: 'string' }, instanceId: { type: 'string' }, target: { type: 'string' },
           compartments: { type: 'integer', minimum: 1, maximum: 8 },
+          openCompartments: { type: 'integer', minimum: 0, maximum: 8, description: '从左侧开始开放的柜体分区数量' },
           shelves: { type: 'integer', minimum: 0, maximum: 12 },
           drawers: { type: 'integer', minimum: 1, maximum: 8 },
           seats: { type: 'integer', minimum: 1, maximum: 5 },

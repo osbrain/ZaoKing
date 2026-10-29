@@ -199,13 +199,55 @@ function buildCustomFurniture(g, f, w, d, c){
       const body = cyl(.5, .5, h, finish); body.scale.set(w, 1, d); g.add(body); break;
     }
     case 'cabinet': case 'wallCabinet': case 'wardrobe': case 'tvConsole': case 'kitchenIsland': case 'vanity': {
-      const plinth = f.shape === 'kitchenIsland' ? .08 : .06;
-      g.add(rbox(w, h - plinth, d, finish, 0, plinth, 0, .018));
-      const frontZ = d/2 + .004, doorW = (w - .012*(n+1))/n;
-      for (let i = 0; i < n; i++){
-        const x = -w/2 + .006 + doorW/2 + i*(doorW + .012);
-        g.add(rbox(doorW, h - plinth - .035, .018, finish, x, plinth + .01, frontZ, .008));
-        g.add(cyl(.009, .009, .035, trim, x + doorW*.28, Math.max(plinth + .13, h*.52), frontZ + .015, 12));
+      const plinth = Math.min(f.shape === 'kitchenIsland' ? .08 : .06, h*.12);
+      const side = Math.min(.022, w*.035, d*.08);
+      const panel = Math.min(.018, h*.025);
+      const back = Math.min(.012, d*.04);
+      const bodyTop = h;
+      const innerHeight = bodyTop - plinth - panel*2;
+      const innerWidth = w - side*2;
+      const bayCount = Math.max(1, Math.min(n, Math.floor(innerWidth/.04)));
+      const divider = Math.min(.016, innerWidth / Math.max(16, bayCount*3));
+      const bayWidth = (innerWidth - divider*(bayCount-1)) / bayCount;
+      const doorDepth = Math.min(.018, d*.08);
+      const frontZ = d/2 - doorDepth/2;
+      const interiorDepth = d - back - Math.min(.008, d*.04);
+      const interiorZ = -d/2 + back + interiorDepth/2;
+      const openCount = Math.min(bayCount, Math.max(0, Math.floor(params.openCompartments ?? 0)));
+
+      // Build a hollow carcass so open bays reveal their back, sides and adjustable shelves.
+      g.add(
+        box(side, bodyTop - plinth, d, finish, -w/2 + side/2, plinth, 0),
+        box(side, bodyTop - plinth, d, finish, w/2 - side/2, plinth, 0),
+        box(innerWidth, panel, d, finish, 0, plinth, 0),
+        box(innerWidth, panel, d, finish, 0, bodyTop - panel, 0),
+        box(innerWidth, innerHeight, back, trim, 0, plinth + panel, -d/2 + back/2),
+      );
+      for (let i = 1; i < bayCount; i++) {
+        const x = -innerWidth/2 + bayWidth*i + divider*(i - .5);
+        g.add(box(divider, innerHeight, interiorDepth, finish, x, plinth + panel, interiorZ));
+      }
+      const shelves = Math.min(12, Math.max(0, Math.floor(params.shelves ?? 0)));
+      for (let bay = 0; bay < openCount; bay++) {
+        const x = -innerWidth/2 + bayWidth*(bay + .5) + divider*bay;
+        for (let shelf = 1; shelf <= shelves; shelf++) {
+          const y = plinth + panel + innerHeight*shelf/(shelves + 1) - panel/2;
+          g.add(box(bayWidth*.96, panel, interiorDepth, finish, x, y, interiorZ));
+        }
+      }
+      for (let bay = openCount; bay < bayCount; bay++) {
+        const x = -innerWidth/2 + bayWidth*(bay + .5) + divider*bay;
+        const doorHeight = Math.max(.02, bodyTop - plinth - panel*.45);
+        const doorWidth = bayWidth*.96;
+        g.add(box(doorWidth, doorHeight, doorDepth, finish, x, plinth + panel*.2, frontZ));
+        const handleHeight = Math.min(.14, doorHeight*.18);
+        const handleX = x + (bay % 2 ? -1 : 1)*doorWidth*.34;
+        const handleRadius = Math.min(.006, doorWidth*.04, d*.05);
+        g.add(cyl(handleRadius, handleRadius, handleHeight, trim, handleX, plinth + (doorHeight - handleHeight)*.52, d/2 - handleRadius, 10));
+      }
+      if (f.shape === 'wardrobe') {
+        const cap = Math.min(.012, h);
+        g.add(box(w, cap, d, trim, 0, h - cap, 0));
       }
       if (f.shape === 'vanity'){
         g.add(box(w*1.04, .045, d*1.03, ceramic({color:'#eeeae1', roughness:.2}), 0, h - .06, 0));
@@ -218,7 +260,6 @@ function buildCustomFurniture(g, f, w, d, c){
         g.add(box(w*.28, .012, d*.21, mat('#535759', {metalness:.72, roughness:.2}), -w*.25, h+.004, 0));
         g.add(rbox(w*.18, .012, d*.14, mat('#b8c0c2', {metalness:.62, roughness:.22}), w*.22, h+.004, -.08, .012));
       }
-      if (f.shape === 'wardrobe') for(let i = 1; i < n; i++) g.add(box(.012, h*.78, d*.88, trim, -w/2 + w*i/n, .12, -.015));
       if (f.shape === 'tvConsole') {
         for (const side of [-1, 1]) g.add(box(.045, Math.min(.12,h*.22), .045, trim, side*(w*.4), 0, -d*.35));
         g.add(box(w*.7, .014, d*.48, mat('#3a3b3c',{roughness:.28}),0,h*.52,-d*.05));

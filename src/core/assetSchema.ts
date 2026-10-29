@@ -13,11 +13,21 @@ const GeometrySchema = z.object({
   finish: z.enum(['wood', 'paint', 'fabric', 'metal', 'ceramic', 'glass']).optional(),
   parameters: z.object({
     compartments: z.number().int().min(1).max(8).optional(),
+    openCompartments: z.number().int().min(0).max(8).optional(),
     shelves: z.number().int().min(0).max(12).optional(),
     drawers: z.number().int().min(1).max(8).optional(),
     seats: z.number().int().min(1).max(5).optional(),
   }).strict().optional(),
-}).strict();
+}).strict().superRefine((geometry, ctx) => {
+  const { compartments, openCompartments } = geometry.parameters ?? {};
+  if (compartments !== undefined && openCompartments !== undefined && openCompartments > compartments) {
+    ctx.addIssue({
+      path: ['parameters', 'openCompartments'],
+      code: z.ZodIssueCode.custom,
+      message: '开放格数量不能超过分区数量',
+    });
+  }
+});
 
 /** 自定义组件只接受声明式数据，禁止脚本、HTML 和外部资源。 */
 export const AssetDefinitionSchema = z.object({

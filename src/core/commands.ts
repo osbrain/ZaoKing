@@ -6,6 +6,7 @@
 
 import type { ComponentInstance, CustomAsset, Opening, Room, SceneDocument, Wall } from './types';
 import { CustomAssetSchema } from './assetSchema';
+import { assetById } from './assets';
 
 type LevelCmd =
   | { levelId?: string; type: 'place'; inst: ComponentInstance }
@@ -91,7 +92,16 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
         }
         case 'setParameters': {
           const i = lv.instances.find((x) => x.id === c.id);
-          if (i) i.parameters = { ...i.parameters, ...c.parameters };
+          if (i) {
+            const asset = assetById(i.assetId, [...(d.assetSnapshots ?? []), ...(d.assets ?? [])]);
+            const parameters = { ...i.parameters, ...c.parameters };
+            const effectiveParameters = { ...asset?.geometry?.parameters, ...parameters };
+            if (effectiveParameters.compartments !== undefined && effectiveParameters.openCompartments !== undefined
+              && effectiveParameters.openCompartments > effectiveParameters.compartments) {
+              parameters.openCompartments = effectiveParameters.compartments;
+            }
+            i.parameters = parameters;
+          }
           break;
         }
         case 'setColor': {
