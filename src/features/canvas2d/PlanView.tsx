@@ -13,7 +13,7 @@ import type { Cmd } from '@/core/commands';
 import { assetById, materialById } from '@/core/assets';
 import { instanceRef, uid, type Asset, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
 import { docBBox, polyArea } from '@/core/geometry';
-import { dimsSvg, furnSVG, openingsSvg, patternsDefs } from '@/core/symbols2d';
+import { dimensionLayout, dimsSvg, furnSVG, openingsSvg, patternsDefs } from '@/core/symbols2d';
 
 const NOLABEL = ['plant', 'floorlamp', 'sidetable', 'barstool', 'beanbag', 'rug'];
 const GRID = 100; // 绘制吸附网格 mm
@@ -72,6 +72,17 @@ function wallRectFromSegment(a: Vec2, b: Vec2, t: number): { x0: number; y0: num
 
 function normRect(a: Vec2, b: Vec2): { x0: number; y0: number; x1: number; y1: number } {
   return { x0: Math.min(a[0], b[0]), y0: Math.min(a[1], b[1]), x1: Math.max(a[0], b[0]), y1: Math.max(a[1], b[1]) };
+}
+
+function planViewBounds(level: Level) {
+  const bounds = docBBox(level);
+  const padding = dimensionLayout(level)?.padding ?? 0;
+  return {
+    x0: bounds.x0 - padding,
+    y0: bounds.y0 - padding,
+    x1: bounds.x1 + padding,
+    y1: bounds.y1 + padding,
+  };
 }
 
 /** 在墙身上于点击处生成标准门/窗洞口（自动贴合墙厚、限制在墙段内） */
@@ -145,7 +156,7 @@ export default function PlanView() {
   useEffect(() => {
     if (!level || fittedRef.current || size.w < 60) return;
     fittedRef.current = true;
-    const bb = docBBox(level);
+    const bb = planViewBounds(level);
     const scale = Math.min(size.w / (bb.x1 - bb.x0), size.h / (bb.y1 - bb.y0)) * 0.82;
     setCamera({ cx: (bb.x0 + bb.x1) / 2, cy: (bb.y0 + bb.y1) / 2, scale });
   }, [level, size.w, size.h, setCamera]);
@@ -429,7 +440,7 @@ export default function PlanView() {
 
   const fit = () => {
     if (!level) return;
-    const bb = docBBox(level);
+    const bb = planViewBounds(level);
     const scale = Math.min(size.w / (bb.x1 - bb.x0), size.h / (bb.y1 - bb.y0)) * 0.82;
     setCamera({ cx: (bb.x0 + bb.x1) / 2, cy: (bb.y0 + bb.y1) / 2, scale });
   };
@@ -471,7 +482,7 @@ export default function PlanView() {
         <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting} />
         <FurnLayer assets={doc?.assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />
         <LabelsLayer level={level} />
-        <g dangerouslySetInnerHTML={{ __html: dimsSvg() }} pointerEvents="none" />
+        <g dangerouslySetInnerHTML={{ __html: dimsSvg(level) }} pointerEvents="none" />
         {/* 绘制预览 */}
         {wallDraft && Math.hypot(wallDraft.b[0] - wallDraft.a[0], wallDraft.b[1] - wallDraft.a[1]) > 10 && (() => {
           const p = WALL_PRESETS[wallPreset];

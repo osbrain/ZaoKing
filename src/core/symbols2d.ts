@@ -6,6 +6,7 @@
  * ============================================================ */
 
 import type { Asset, Level } from './types';
+import { docBBox } from './geometry';
 
 /* ---------- 基础工具 ---------- */
 
@@ -348,35 +349,129 @@ export function openingsSvg(level: Level): string {
   return s;
 }
 
-/* ---------- 尺寸标注（原型 renderDims 静态移植） ---------- */
+/* ---------- 尺寸标注：由当前户型边界和贴边墙段派生 ---------- */
 
-export function dimsSvg(): string {
+export interface DimensionLayout {
+  bounds: ReturnType<typeof docBBox>;
+  width: number;
+  height: number;
+  innerOffset: number;
+  outerOffset: number;
+  padding: number;
+  edges: { top: number[]; bottom: number[]; left: number[]; right: number[] };
+}
+
+const DIMENSION_EDGE_TOLERANCE = 300;
+
+function edgeCoordinates(level: Level, bounds: DimensionLayout['bounds'], side: 'top' | 'bottom' | 'left' | 'right') {
+  const horizontal = side === 'top' || side === 'bottom';
+  const edge = side === 'top' ? bounds.y0 : side === 'bottom' ? bounds.y1 : side === 'left' ? bounds.x0 : bounds.x1;
+  const min = horizontal ? bounds.x0 : bounds.y0;
+  const max = horizontal ? bounds.x1 : bounds.y1;
+  const values = [min, max];
+
+  for (const wall of level.walls) {
+    const crossesEdge = horizontal
+      ? wall.y0 <= edge + DIMENSION_EDGE_TOLERANCE && wall.y1 >= edge - DIMENSION_EDGE_TOLERANCE
+      : wall.x0 <= edge + DIMENSION_EDGE_TOLERANCE && wall.x1 >= edge - DIMENSION_EDGE_TOLERANCE;
+    if (!crossesEdge) continue;
+    values.push(...(horizontal ? [wall.x0, wall.x1] : [wall.y0, wall.y1]));
+  }
+
+  for (const room of level.rooms) {
+    for (const [x, y] of room.poly) {
+      if (Math.abs((horizontal ? y : x) - edge) <= DIMENSION_EDGE_TOLERANCE) {
+        values.push(horizontal ? x : y);
+      }
+    }
+  }
+
+  return [...new Set(values
+    .filter((value) => value >= min - DIMENSION_EDGE_TOLERANCE && value <= max + DIMENSION_EDGE_TOLERANCE)
+    .map((value) => Math.round(Math.min(max, Math.max(min, value)))))].sort((a, b) => a - b);
+}
+
+export function dimensionLayout(level: Level): DimensionLayout | null {
+  if (level.walls.length === 0 && level.rooms.length === 0) return null;
+  const bounds = docBBox(level);
+  const width = Math.round(bounds.x1 - bounds.x0);
+  const height = Math.round(bounds.y1 - bounds.y0);
+  if (width <= 0 || height <= 0) return null;
+
+  const outerOffset = Math.max(300, Math.min(900, Math.max(width, height) * 0.075));
+  return {
+    bounds,
+    width,
+    height,
+    innerOffset: outerOffset / 2,
+    outerOffset,
+    padding: outerOffset + 240,
+    edges: {
+      top: edgeCoordinates(level, bounds, 'top'),
+      bottom: edgeCoordinates(level, bounds, 'bottom'),
+      left: edgeCoordinates(level, bounds, 'left'),
+      right: edgeCoordinates(level, bounds, 'right'),
+    },
+  };
+}
+
+export function dimsSvg(level: Level): string {
+  const layout = dimensionLayout(level);
+  if (!layout) return '';
+
   const DC = '#7d7160';
   const LS = `stroke="${DC}" stroke-width="1" vector-effect="non-scaling-stroke"`;
   const TK = `stroke="${DC}" stroke-width="2" vector-effect="non-scaling-stroke"`;
   const txt = (x: number, y: number, v: number, rot?: boolean) =>
-    `<text x="${x}" y="${y}" font-size="${v < 400 ? 140 : 200}" text-anchor="middle" fill="${DC}" ${rot ? `transform="rotate(-90 ${x} ${y})"` : ''}>${v}</text>`;
-  const chain = (horiz: boolean, at: number, start: number, segs: number[]) => {
-    const pts = [start];
-    segs.forEach((v) => pts.push(pts[pts.length - 1] + v));
-    let s = horiz
-      ? `<line x1="${pts[0]}" y1="${at}" x2="${pts[pts.length - 1]}" y2="${at}" ${LS}/>`
-      : `<line x1="${at}" y1="${pts[0]}" x2="${at}" y2="${pts[pts.length - 1]}" ${LS}/>`;
-    pts.forEach((p) => {
-      s += horiz
-        ? `<line x1="${p}" y1="${at - 170}" x2="${p}" y2="${at + 170}" ${LS}/><line x1="${p - 80}" y1="${at + 80}" x2="${p + 80}" y2="${at - 80}" ${TK}/>`
-        : `<line x1="${at - 170}" y1="${p}" x2="${at + 170}" y2="${p}" ${LS}/><line x1="${at - 80}" y1="${p + 80}" x2="${at + 80}" y2="${p - 80}" ${TK}/>`;
+    `<text x="${x}" y="${y}" font-size="${v < 500 ? 140 : 200}" text-anchor="middle" fill="${DC}" ${rot ? `transform="rotate(-90 ${x} ${y})"` : ''}>${v}</text>`;
+  const line = (x1: number, y1: number, x2: number, y2: number, attrs = LS) =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${attrs}/>`;
+  const dimensionLine = (
+    horizontal: boolean,
+    at: number,
+    points: number[],
+    anchors: number[],
+    edge: number,
+    outward: -1 | 1,
+  ) => {
+    if (points.length < 2) return '';
+    let s = horizontal
+      ? line(points[0], at, points[points.length - 1], at)
+      : line(at, points[0], at, points[points.length - 1]);
+    anchors.forEach((point) => {
+      s += horizontal
+        ? line(point, edge, point, at + outward * 24, `${LS} opacity=".65"`)
+        : line(edge, point, at + outward * 24, point, `${LS} opacity=".65"`);
     });
-    segs.forEach((v, i) => {
-      const mid = (pts[i] + pts[i + 1]) / 2;
-      s += horiz ? txt(mid, at - 70, v) : txt(at - 70, mid, v, true);
+    points.forEach((point) => {
+      s += horizontal
+        ? line(point, at - 150, point, at + 150) + line(point - 75, at + 75, point + 75, at - 75, TK)
+        : line(at - 150, point, at + 150, point) + line(at - 75, point + 75, at + 75, point - 75, TK);
     });
+    for (let i = 0; i < points.length - 1; i++) {
+      const value = points[i + 1] - points[i];
+      if (value <= 0) continue;
+      const mid = (points[i] + points[i + 1]) / 2;
+      s += horizontal
+        ? txt(mid, at + outward * 190, value)
+        : txt(at + outward * 190, mid, value, true);
+    }
     return s;
   };
-  return (
-    chain(true, -750, 0, [1580, 240, 2760, 240, 1540, 240, 3670]) + chain(true, -1250, 0, [10270]) +
-    chain(true, 11350, 0, [2180, 240, 2160, 240, 5450, 240, 1340]) + chain(true, 11850, 0, [11850]) +
-    chain(false, -800, 0, [3370, 1580, 240, 2770, 240, 2360]) + chain(false, -1300, 0, [10560]) +
-    chain(false, 12750, 0, [3370, 240, 2760, 240, 3950]) + chain(false, 13250, 0, [10560])
-  );
+  const { bounds, edges, innerOffset, outerOffset } = layout;
+  const horizontalOverall = [bounds.x0, bounds.x1];
+  const verticalOverall = [bounds.y0, bounds.y1];
+  const edgeChain = (horizontal: boolean, side: 'top' | 'bottom' | 'left' | 'right') => {
+    const isTopOrLeft = side === 'top' || side === 'left';
+    const edge = side === 'top' ? bounds.y0 : side === 'bottom' ? bounds.y1 : side === 'left' ? bounds.x0 : bounds.x1;
+    const sign = isTopOrLeft ? -1 : 1;
+    const points = edges[side];
+    const lineAt = edge + sign * innerOffset;
+    const overallAt = edge + sign * outerOffset;
+    const overallPoints = horizontal ? horizontalOverall : verticalOverall;
+    return (points.length > 2 ? dimensionLine(horizontal, lineAt, points, points, edge, sign) : '') +
+      dimensionLine(horizontal, overallAt, overallPoints, points, edge, sign);
+  };
+
+  return edgeChain(true, 'top') + edgeChain(true, 'bottom') + edgeChain(false, 'left') + edgeChain(false, 'right');
 }
