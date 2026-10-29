@@ -12,6 +12,7 @@ type LevelCmd =
   | { levelId?: string; type: 'delete'; id: string }
   | { levelId?: string; type: 'move'; id: string; t: { x: number; y: number; rot: number } }
   | { levelId?: string; type: 'resize'; id: string; size: { w?: number; d?: number; h?: number } }
+  | { levelId?: string; type: 'setParameters'; id: string; parameters: NonNullable<ComponentInstance['parameters']> }
   | { levelId?: string; type: 'setColor'; id: string; color: string }
   | { levelId?: string; type: 'replaceAsset'; id: string; assetId: string }
   | { levelId?: string; type: 'setRoomMaterial'; roomId: string; materialId: string }
@@ -19,7 +20,7 @@ type LevelCmd =
   /* ---- 户型编辑：墙体 ---- */
   | { levelId?: string; type: 'addWall'; wall: Wall }
   | { levelId?: string; type: 'deleteWall'; id: string }
-  | { levelId?: string; type: 'setWall'; id: string; rect?: [number, number, number, number]; kind?: Wall['kind']; height?: number }
+  | { levelId?: string; type: 'setWall'; id: string; rect?: [number, number, number, number]; kind?: Wall['kind']; height?: number; color?: string }
   /* ---- 户型编辑：房间地面 ---- */
   | { levelId?: string; type: 'addRoom'; room: Room }
   | { levelId?: string; type: 'deleteRoom'; id: string }
@@ -88,6 +89,11 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
           if (i) i.size = { ...i.size, ...c.size };
           break;
         }
+        case 'setParameters': {
+          const i = lv.instances.find((x) => x.id === c.id);
+          if (i) i.parameters = { ...i.parameters, ...c.parameters };
+          break;
+        }
         case 'setColor': {
           const i = lv.instances.find((x) => x.id === c.id);
           if (i) i.color = c.color;
@@ -126,6 +132,7 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
             }
             if (c.kind) w.kind = c.kind;
             if (c.height !== undefined) w.height = c.height;
+            if (c.color !== undefined) w.color = c.color;
           }
           break;
         }

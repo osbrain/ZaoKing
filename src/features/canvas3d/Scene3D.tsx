@@ -17,8 +17,8 @@ import { createModelFactory, disposeModelGeometry } from './modelFactory';
 
 type ModelFactory = ReturnType<typeof createModelFactory>;
 
-function Solid({ rect, bottom, top, cap = true }: {
-  rect: number[]; bottom: number; top: number; cap?: boolean;
+function Solid({ rect, bottom, top, color, cap = true }: {
+  rect: number[]; bottom: number; top: number; color?: string; cap?: boolean;
 }) {
   const [x0, y0, x1, y1] = rect;
   if (top <= bottom || x1 <= x0 || y1 <= y0) return null;
@@ -26,7 +26,7 @@ function Solid({ rect, bottom, top, cap = true }: {
     <mesh position={[(x0 + x1) / 2000, (bottom + top) / 2000, -(y0 + y1) / 2000]} castShadow receiveShadow>
       <boxGeometry args={[(x1 - x0) / 1000, (top - bottom) / 1000, (y1 - y0) / 1000]} />
       {Array.from({ length: 6 }, (_, i) => (
-        <meshStandardMaterial key={i} attach={'material-' + i} color={cap && i === 2 ? '#34312d' : '#f4f1eb'} roughness={cap && i === 2 ? 0.9 : 0.92} />
+        <meshStandardMaterial key={i} attach={'material-' + i} color={cap && i === 2 ? color ?? '#34312d' : color ?? '#f4f1eb'} roughness={cap && i === 2 ? 0.9 : 0.92} />
       ))}
     </mesh>
   );
@@ -91,7 +91,7 @@ function Architecture({ level, cutHeight }: { level: Level; cutHeight: number })
   const solids = useMemo(() => buildWallSolids(level, cutHeight), [level.walls, level.openings, cutHeight]);
   return (
     <group>
-      {solids.map((s, i) => <Solid key={i} rect={[s.x0, s.y0, s.x1, s.y1]} bottom={s.bottom} top={s.top} />)}
+      {solids.map((s, i) => <Solid key={i} rect={[s.x0, s.y0, s.x1, s.y1]} bottom={s.bottom} top={s.top} color={s.color} />)}
       {level.openings.map(o => o.kind === 'window' || o.kind === 'sliding'
         ? <WindowFrame key={o.id} opening={o} cutHeight={cutHeight} />
         : <DoorLeaf key={o.id} opening={o} cutHeight={cutHeight} />)}
@@ -139,13 +139,14 @@ function Furniture({ inst, models, asset }: { inst: ComponentInstance; models: M
   const object = useMemo(() => {
     const model = models.buildFurniture({
       id: inst.id, type: ref.type, w: Math.max(10, ref.w), d: Math.max(10, ref.d), h: ref.h,
-      shape: asset?.geometry?.shape, finish: asset?.geometry?.finish, parameters: asset?.geometry?.parameters,
+      shape: asset?.geometry?.shape, finish: asset?.geometry?.finish,
+      parameters: { ...asset?.geometry?.parameters, ...inst.parameters },
       color: ref.color, cx: 6000, cy: 5300, rot: 0,
     }) as THREE.Group;
     // Source models place themselves relative to the static prototype's origin.
     model.position.set(0, 0, 0);
     return model;
-  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, asset?.geometry]);
+  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, asset?.geometry, inst.parameters]);
   useEffect(() => () => disposeModelGeometry(object), [object]);
   return (
     <group position={[inst.t.x / 1000, 0.015, -inst.t.y / 1000]} rotation={[0, inst.t.rot * Math.PI / 180, 0]}
@@ -279,7 +280,7 @@ function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Leve
 }
 
 export default function Scene3D() {
-  const doc = useSceneStore(s => s.doc);
+  const doc = useSceneStore(s => s.previewDoc ?? s.doc);
   const select = useEditorStore(s => s.select);
   const setPreset3d = useEditorStore(s => s.setPreset3d);
   const [cutHeight, setCutHeight] = useState(2800);

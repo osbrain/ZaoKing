@@ -23,6 +23,7 @@ const wallSchema = z.object({
   y1: coordinate,
   kind: z.enum(['bearing', 'exterior', 'partition', 'low']),
   height: positiveMeasure,
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 }).strict().superRefine((wall, ctx) => {
   if (wall.x0 >= wall.x1 || wall.y0 >= wall.y1) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Wall bounds must have positive width and height' });
@@ -69,6 +70,12 @@ const componentInstanceSchema = z.object({
   t: z.object({ x: coordinate, y: coordinate, rot: z.number().finite() }).strict(),
   size: z.object({ w: positiveMeasure.optional(), d: positiveMeasure.optional(), h: positiveMeasure.optional() }).strict()
     .refine((size) => size.w !== undefined || size.d !== undefined || size.h !== undefined, 'At least one size override is required').optional(),
+  parameters: z.object({
+    compartments: z.number().int().min(1).max(8).optional(),
+    shelves: z.number().int().min(0).max(12).optional(),
+    drawers: z.number().int().min(1).max(8).optional(),
+    seats: z.number().int().min(1).max(5).optional(),
+  }).strict().refine((parameters) => Object.keys(parameters).length > 0, 'At least one parameter override is required').optional(),
   color: z.string().trim().min(1).max(64).optional(),
   locked: z.boolean().optional(),
 }).strict();

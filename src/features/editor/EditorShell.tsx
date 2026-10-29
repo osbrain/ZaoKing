@@ -43,6 +43,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   const cursor = useEditorStore((s) => s.cursor);
   const camera = useEditorStore((s) => s.camera);
   const toast = useEditorStore((s) => s.toast);
+  const previewingAi = useSceneStore((s) => s.previewDoc !== null);
 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
@@ -240,6 +241,11 @@ export default function EditorShell({ projectId }: { projectId: string }) {
 
         <main className="relative min-w-0 flex-1">
           {viewMode === '2d' ? <PlanView /> : <Scene3D />}
+          {previewingAi && (
+            <div className="pointer-events-auto absolute inset-0 z-20 border-4 border-amber-500/70 bg-amber-100/10" aria-label="AI 变更预览">
+              <span className="absolute left-3 top-3 rounded-md bg-amber-700 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm">AI 变更预览 · 检查右侧清单</span>
+            </div>
+          )}
         </main>
 
         <aside className="hidden w-80 shrink-0 flex-col border-l border-zinc-200 bg-white md:flex">

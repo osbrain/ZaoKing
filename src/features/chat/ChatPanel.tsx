@@ -7,7 +7,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { askAi, type ChatMsg } from '@/lib/api';
 import { executeOps, type DesignOp } from '@/core/ops';
+import { applyCmds } from '@/core/commands';
 import { useSceneStore } from '@/stores/sceneStore';
+
+interface PendingChange {
+  label: string;
+  cmds: ReturnType<typeof executeOps>['cmds'];
+  log: string[];
+  baseRev: number;
+}
 
 const QUICK_PROMPTS = [
   '在客厅加一个三人沙发',
@@ -25,6 +33,7 @@ export default function ChatPanel() {
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingChange | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,12 +43,13 @@ export default function ChatPanel() {
 
   const send = async (text?: string) => {
     const message = (text ?? input).trim();
-    if (!message || busy) return;
+    if (!message || busy || pending) return;
     setInput('');
     setMessages((m) => [...m, { role: 'user', content: message }]);
     setBusy(true);
     try {
-      const doc = useSceneStore.getState().doc;
+      const state = useSceneStore.getState();
+      const doc = state.doc;
       if (!doc) throw new Error('文档未加载');
       const res = await askAi(message, doc, messages);
       let content = res.reply;
@@ -47,9 +57,12 @@ export default function ChatPanel() {
       if (ops.length) {
         const outcome = executeOps(doc, ops);
         if (outcome.cmds.length) {
-          useSceneStore.getState().run(`AI · ${ops[0].op}`, outcome.cmds);
+          state.setPreview(applyCmds(doc, outcome.cmds));
+          setPending({ label: `AI · ${ops[0].op}`, cmds: outcome.cmds, log: outcome.log, baseRev: state.rev });
+          content = `${res.reply}\n已生成 ${outcome.cmds.length} 项变更，请检查预览后确认应用。${outcome.log.length ? `\n${outcome.log.join('\n')}` : ''}`.trim();
+        } else {
+          content = `${res.reply}\n${outcome.log.join('\n')}`.trim();
         }
-        content = `${res.reply}\n${outcome.log.join('\n')}`.trim();
       }
       setMessages((m) => [...m, { role: 'assistant', content }]);
     } catch (e) {
@@ -60,6 +73,25 @@ export default function ChatPanel() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const applyPending = () => {
+    if (!pending) return;
+    const scene = useSceneStore.getState();
+    if (scene.rev !== pending.baseRev) {
+      scene.setPreview(null);
+      setMessages((items) => [...items, { role: 'assistant', content: '户型在预览期间已发生变化，请重新发送这条指令。' }]);
+      setPending(null);
+      return;
+    }
+    scene.run(pending.label, pending.cmds);
+    setMessages((items) => [...items, { role: 'assistant', content: '变更已应用，可使用撤销恢复。' }]);
+    setPending(null);
+  };
+
+  const cancelPending = () => {
+    useSceneStore.getState().setPreview(null);
+    setPending(null);
   };
 
   return (
@@ -83,12 +115,25 @@ export default function ChatPanel() {
         )}
       </div>
 
+      {pending && (
+        <div className="border-t border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold text-amber-950">待确认的场景变更 · {pending.cmds.length} 项</p>
+          <ul className="mt-1 max-h-24 list-inside list-disc overflow-y-auto text-[11px] text-amber-900">
+            {pending.log.filter((line) => line.startsWith('✓')).map((line, index) => <li key={index}>{line.slice(2)}</li>)}
+          </ul>
+          <div className="mt-2 flex justify-end gap-2">
+            <button onClick={cancelPending} className="rounded-md border border-amber-300 px-3 py-1.5 text-xs text-amber-950 hover:bg-amber-100">取消</button>
+            <button onClick={applyPending} className="rounded-md bg-amber-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800">确认应用</button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-1.5 border-t border-zinc-100 px-3 py-2">
         {QUICK_PROMPTS.map((p) => (
           <button
             key={p}
             onClick={() => send(p)}
-            disabled={busy}
+            disabled={busy || Boolean(pending)}
             className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-500 transition hover:border-accent hover:text-accent disabled:opacity-40"
           >
             {p}
@@ -108,7 +153,7 @@ export default function ChatPanel() {
         />
         <button
           onClick={() => send()}
-          disabled={busy || !input.trim()}
+          disabled={busy || Boolean(pending) || !input.trim()}
           className="rounded-lg bg-accent px-3.5 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
         >
           发送

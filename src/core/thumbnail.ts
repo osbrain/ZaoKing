@@ -31,7 +31,7 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
     .map((r) => `<polygon points="${r.poly.map((p) => p.join(',')).join(' ')}" fill="url(#${prefix}m-${r.floorMaterialId})"/>`)
     .join('');
   const walls = lv.walls
-    .map((wl) => `<rect x="${wl.x0}" y="${wl.y0}" width="${wl.x1 - wl.x0}" height="${wl.y1 - wl.y0}" fill="${WALL_FILL[wl.kind] ?? '#a7a195'}"/>`)
+    .map((wl) => `<rect x="${wl.x0}" y="${wl.y0}" width="${wl.x1 - wl.x0}" height="${wl.y1 - wl.y0}" fill="${wl.color ?? WALL_FILL[wl.kind] ?? '#a7a195'}"/>`)
     .join('');
   const assets = doc.assets ?? [];
   const furn = lv.instances

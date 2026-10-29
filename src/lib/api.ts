@@ -17,11 +17,11 @@ export async function fetchProjects(): Promise<{ projects: ProjectInfo[]; aiMode
 
 export type ProjectTemplate = 'sample' | 'blank';
 
-export async function createProject(name?: string, template: ProjectTemplate = 'sample'): Promise<ProjectInfo> {
+export async function createProject(name?: string, template: ProjectTemplate = 'sample', document?: SceneDocument): Promise<ProjectInfo> {
   const res = await fetch('/api/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, template }),
+    body: JSON.stringify({ name, template, document }),
   });
   if (!res.ok) throw new Error('创建项目失败');
   const j = await res.json();

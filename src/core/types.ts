@@ -19,6 +19,8 @@ export interface Wall {
   kind: WallKind;
   /** 墙高 mm（矮墙 1100，其余 2800） */
   height: number;
+  /** 可选的墙体表面颜色覆盖 */
+  color?: string;
 }
 
 export interface Room {
@@ -58,6 +60,8 @@ export interface ComponentInstance {
   t: { x: number; y: number; rot: number };
   /** 尺寸覆盖（参数化的最简形态） */
   size?: { w?: number; d?: number; h?: number };
+  /** 每个实例单独覆盖资产的结构参数（如层板、抽屉或座位数量） */
+  parameters?: Partial<CustomGeometry['parameters']>;
   /** 颜色覆盖（2D 图例着色 / 3D 占位体着色） */
   color?: string;
   locked?: boolean;

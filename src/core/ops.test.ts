@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { executeOps } from './ops';
-import { buildSeedDocument } from './seed';
+import { buildBlankDocument, buildSeedDocument } from './seed';
+import { resolveAssetByQuery } from './assets';
+import type { SceneDocument } from './types';
+
+function sofaDocument(): SceneDocument {
+  const document = buildBlankDocument();
+  const level = document.levels[0];
+  level.rooms.push({
+    id: 'room-1', name: '客厅', poly: [[0, 0], [6000, 0], [6000, 6000], [0, 6000]],
+    floorMaterialId: 'wood',
+  });
+  const sofa = resolveAssetByQuery('三人沙发')!;
+  level.instances.push({ id: 'sofa-1', assetId: sofa.id, t: { x: 3000, y: 3000, rot: 0 } });
+  return document;
+}
 
 describe('level-aware design operations', () => {
   it('requires a floor to be specified for operations in multi-level documents', () => {
@@ -24,5 +38,69 @@ describe('level-aware design operations', () => {
     }]);
     expect(outcome.cmds).toHaveLength(1);
     expect(outcome.cmds[0].levelId).toBe('lv2');
+  });
+
+  it('creates a parameter edit for an exact component instance', () => {
+    const document = sofaDocument();
+    const outcome = executeOps(document, [{ op: 'resize_component', instanceId: 'sofa-1', widthMm: 2200 }]);
+    expect(outcome.cmds).toEqual([{ levelId: 'lv1', type: 'resize', id: 'sofa-1', size: { w: 2200 } }]);
+  });
+
+  it('does not silently delete one of several same-name components', () => {
+    const document = buildSeedDocument();
+    const outcome = executeOps(document, [{ op: 'delete_component', room: '客厅', target: '绿植' }]);
+    expect(outcome.cmds).toHaveLength(0);
+    expect(outcome.log[0]).toContain('多件候选');
+    expect(outcome.log[0]).toContain('seed35');
+  });
+
+  it('rejects moves and resizes that collide with room boundaries or other furniture', () => {
+    const document = sofaDocument();
+    const move = executeOps(document, [{ op: 'move_component', instanceId: 'sofa-1', dxMm: 20000 }]);
+    expect(move.cmds).toHaveLength(0);
+    expect(move.log[0]).toContain('越界');
+    const resize = executeOps(document, [{ op: 'resize_component', instanceId: 'sofa-1', widthMm: 20000 }]);
+    expect(resize.cmds).toHaveLength(0);
+    expect(resize.log[0]).toContain('越界');
+  });
+
+  it('changes every wall adjacent to the requested room and returns undoable commands', () => {
+    const document = buildBlankDocument();
+    const level = document.levels[0];
+    level.rooms.push({ id: 'room', name: '客厅', poly: [[200, 200], [5800, 200], [5800, 5800], [200, 5800]], floorMaterialId: 'wood' });
+    level.walls = [
+      { id: 'north', x0: 0, y0: 0, x1: 6000, y1: 200, kind: 'exterior', height: 2800 },
+      { id: 'south', x0: 0, y0: 5800, x1: 6000, y1: 6000, kind: 'exterior', height: 2800 },
+      { id: 'west', x0: 0, y0: 0, x1: 200, y1: 6000, kind: 'exterior', height: 2800 },
+      { id: 'east', x0: 5800, y0: 0, x1: 6000, y1: 6000, kind: 'exterior', height: 2800 },
+    ];
+    const outcome = executeOps(document, [{ op: 'set_wall_color', room: '客厅', query: '浅灰色' }]);
+    expect(outcome.cmds).toHaveLength(4);
+    expect(outcome.cmds.every((command) => command.type === 'setWall' && command.color === '#c8c8c5')).toBe(true);
+  });
+
+  it('changes only supported per-instance custom geometry parameters', () => {
+    const document = sofaDocument();
+    const level = document.levels[0];
+    document.assets = [{
+      id: 'custom:bookcase', type: 'custom', name: '定制书架', category: '书房',
+      w: 1200, d: 350, h: 2100, color: '#a47a52', tags: ['书架'],
+      geometry: { shape: 'bookcase', parameters: { compartments: 3, shelves: 5 } },
+    }];
+    level.instances = [{ id: 'bookcase-1', assetId: 'custom:bookcase', t: { x: 3000, y: 3000, rot: 0 } }];
+    const outcome = executeOps(document, [{ op: 'set_component_parameters', instanceId: 'bookcase-1', shelves: 7, seats: 2 }]);
+    expect(outcome.cmds).toEqual([{ levelId: 'lv1', type: 'setParameters', id: 'bookcase-1', parameters: { shelves: 7 } }]);
+    expect(outcome.log.some((line) => line.includes('不支持修改seats'))).toBe(true);
+  });
+
+  it('maps dark color descriptions before their broader color names', () => {
+    const document = buildBlankDocument();
+    const level = document.levels[0];
+    level.rooms.push({ id: 'room', name: '客厅', poly: [[0, 0], [6000, 0], [6000, 6000], [0, 6000]], floorMaterialId: 'wood' });
+    level.walls = [{ id: 'wall', x0: 0, y0: 0, x1: 6000, y1: 200, kind: 'exterior', height: 2800 }];
+    const gray = executeOps(document, [{ op: 'set_wall_color', room: '客厅', query: '深灰色' }]);
+    expect(gray.cmds).toEqual([{ levelId: 'lv1', type: 'setWall', id: 'wall', color: '#55565a' }]);
+    const blue = executeOps(document, [{ op: 'set_wall_color', room: '客厅', query: '深蓝色' }]);
+    expect(blue.cmds).toEqual([{ levelId: 'lv1', type: 'setWall', id: 'wall', color: '#405f7a' }]);
   });
 });

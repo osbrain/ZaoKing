@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db';
 import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
 import { planThumbSvg } from '@/core/thumbnail';
 import type { SceneDocument } from '@/core/types';
+import { SceneDocumentSchema } from '@/core/sceneSchema';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,12 +40,18 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}) as { name?: string; template?: string });
-  const template = body.template === 'blank' ? 'blank' : 'sample';
-  const doc =
-    template === 'blank'
-      ? buildBlankDocument(body.name?.trim() || '我的户型方案')
-      : buildSeedDocument(body.name);
+  const body = await req.json().catch(() => null);
+  const parsed = z.object({
+    name: z.string().trim().max(200).optional(),
+    template: z.enum(['blank', 'sample']).optional(),
+    document: SceneDocumentSchema.optional(),
+  }).strict().safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: 'invalid project request' }, { status: 400 });
+  const template = parsed.data.template ?? 'sample';
+  const name = parsed.data.name || (template === 'blank' ? '我的户型方案' : '三室两厅两卫 · 示例方案');
+  const doc = parsed.data.document
+    ? SceneDocumentSchema.parse({ ...parsed.data.document, meta: { ...parsed.data.document.meta, name } })
+    : template === 'blank' ? buildBlankDocument(name) : buildSeedDocument(name);
   const project = await prisma.project.create({
     data: {
       name: doc.meta.name,

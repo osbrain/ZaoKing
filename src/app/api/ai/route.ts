@@ -6,16 +6,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { DesignOp } from '@/core/ops';
 import { parseAiToolCalls } from '@/core/aiTools';
-import { assetCatalog, MATERIALS } from '@/core/assets';
+import { assetCatalog, MATERIALS, parseWidthMm } from '@/core/assets';
 import { pointInPoly } from '@/core/geometry';
 import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
-import type { SceneDocument } from '@/core/types';
+import { instanceRef, type SceneDocument } from '@/core/types';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
 
-/* ---------- 场景上下文包（控制 token，只传摘要不传坐标） ---------- */
+/* ---------- 场景上下文包（带稳定 ID 和可编辑参数） ---------- */
 
 function packContext(doc: SceneDocument): string {
   const catalog = assetCatalog(doc.assets);
@@ -24,11 +24,19 @@ function packContext(doc: SceneDocument): string {
   const lines: string[] = [];
   for (const level of doc.levels) {
     lines.push(`【楼层 ${level.name}，levelId=${level.id}】`);
+    lines.push(`墙体：${level.walls.map((wall) => `${wall.kind}（wallId=${wall.id}）`).join('、') || '无'}`);
     for (const r of level.rooms) {
-      const names = level.instances
+      const instances = level.instances
         .filter((i) => pointInPoly([i.t.x, i.t.y], r.poly))
-        .map((i) => catalog.find((a) => a.id === i.assetId)?.name ?? i.assetId);
-      lines.push(`- ${r.name}${r.counted === false ? '（飘窗，不计面积）' : ''}：${names.length ? names.join('、') : '空'}`);
+        .map((i) => {
+          const asset = catalog.find((a) => a.id === i.assetId);
+          const ref = instanceRef(i, asset);
+          const parameters = Object.entries(asset?.geometry?.parameters ?? {})
+            .map(([key, value]) => `${key}=${i.parameters?.[key as keyof NonNullable<typeof i.parameters>] ?? value}`)
+            .join(',');
+          return `${ref.name}（instanceId=${i.id}，${ref.w}×${ref.d}×${ref.h}mm，${Math.round(i.t.rot)}°${parameters ? `，支持参数 ${parameters}` : ''}）`;
+        });
+      lines.push(`- ${r.name}${r.counted === false ? '（飘窗，不计面积）' : ''}：${instances.length ? instances.join('、') : '空'}`);
     }
   }
   const cats = [...new Set(catalog.map((a) => a.category))]
@@ -37,16 +45,18 @@ function packContext(doc: SceneDocument): string {
       return `  · ${cat}：${names.join('、')}`;
     })
     .join('\n');
-  return `【房间与现有布置】\n${lines.join('\n')}\n【可用材质】${MATERIALS.map((m) => m.name).join('、')}\n【组件库】\n${cats}`;
+  return `【房间、墙体与现有布置】\n${lines.join('\n')}\n【可用材质】${MATERIALS.map((m) => m.name).join('、')}\n【组件库】\n${cats}`;
 }
 
 const SYSTEM_PROMPT = `你是 ZaoKing 室内设计助手，通过调用工具函数操作用户的户型场景。
 规则：
-1. 绝不虚构坐标、尺寸或 id —— 几何摆放由系统求解，你只描述意图。
-2. 多层方案必须通过 levelId 选择楼层；room 参数必须是该楼层中出现过的房间名。query/target/spec 使用组件库中的名称关键词。
-3. 用户一句话包含多个意图时，并行调用多个工具。
-4. 信息不足或有歧义时，调用 ask_user 向用户提问（给选项）。
-5. 工具调用完成后简短总结你做了什么；不要编造未执行的操作。`;
+1. 组件目标优先使用上下文中的 instanceId；同名组件有多个时调用 ask_user，不要猜。
+2. 多层方案必须传 levelId，room 必须使用该楼层中出现过的房间名。
+3. 不要推断精确尺寸或移动距离；只有用户明确给出毫米数或角度时才调用相应参数工具。
+4. 结构参数只可修改上下文明确列出的资产参数；不支持的参数不要猜。
+5. 添加组件的位置由系统求解。用户一句话包含多个意图时可调用多个工具。
+6. 墙面换色使用 set_wall_color，地面材料使用 set_floor_material；不要把墙面指令误作地面指令。
+7. 信息不足或操作有歧义时调用 ask_user；工具调用完成后简短总结，不要编造操作。`;
 
 const TOOLS = [
   {
@@ -75,10 +85,11 @@ const TOOLS = [
         properties: {
           room: { type: 'string' },
           levelId: { type: 'string' },
+          instanceId: { type: 'string', description: '上下文提供的唯一实例 ID，优先使用' },
           target: { type: 'string', description: '被替换的现有组件，如"床"' },
           spec: { type: 'string', description: '目标规格或名称，如"1.8米"、"双人沙发"' },
         },
-        required: ['target'],
+        required: [],
       },
     },
   },
@@ -89,8 +100,82 @@ const TOOLS = [
       description: '删除房间里指定的组件',
       parameters: {
         type: 'object',
-        properties: { room: { type: 'string' }, levelId: { type: 'string' }, target: { type: 'string' } },
-        required: ['target'],
+        properties: { room: { type: 'string' }, levelId: { type: 'string' }, instanceId: { type: 'string' }, target: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'move_component',
+      description: '按用户明确给出的毫米偏移移动组件，或按用户明确给出的角度旋转组件',
+      parameters: {
+        type: 'object',
+        properties: {
+          room: { type: 'string' }, levelId: { type: 'string' }, instanceId: { type: 'string' }, target: { type: 'string' },
+          dxMm: { type: 'number', description: '向右为正，向左为负；仅用户明确给出距离时填写' },
+          dyMm: { type: 'number', description: '向下为正，向上为负；仅用户明确给出距离时填写' },
+          rotationDeltaDeg: { type: 'number', description: '顺时针旋转角度，仅用户明确给出角度时填写' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resize_component',
+      description: '按用户明确给出的毫米尺寸修改组件宽、深或高',
+      parameters: {
+        type: 'object',
+        properties: {
+          room: { type: 'string' }, levelId: { type: 'string' }, instanceId: { type: 'string' }, target: { type: 'string' },
+          widthMm: { type: 'number' }, depthMm: { type: 'number' }, heightMm: { type: 'number' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_component_color',
+      description: '修改指定家具组件的颜色，不要用于墙面或地面',
+      parameters: {
+        type: 'object',
+        properties: { room: { type: 'string' }, levelId: { type: 'string' }, instanceId: { type: 'string' }, target: { type: 'string' }, query: { type: 'string', description: '颜色描述' } },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_component_parameters',
+      description: '修改定制家具实例支持的结构参数，如柜体分格、书架层板、抽屉或沙发座位数量',
+      parameters: {
+        type: 'object',
+        properties: {
+          room: { type: 'string' }, levelId: { type: 'string' }, instanceId: { type: 'string' }, target: { type: 'string' },
+          compartments: { type: 'integer', minimum: 1, maximum: 8 },
+          shelves: { type: 'integer', minimum: 0, maximum: 12 },
+          drawers: { type: 'integer', minimum: 1, maximum: 8 },
+          seats: { type: 'integer', minimum: 1, maximum: 5 },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_wall_color',
+      description: '修改指定房间相邻墙体的颜色，或按 wallId 修改一段墙体',
+      parameters: {
+        type: 'object',
+        properties: { room: { type: 'string' }, levelId: { type: 'string' }, wallId: { type: 'string' }, query: { type: 'string', description: '颜色描述，如浅灰色或 #c8c8c5' } },
+        required: ['query'],
       },
     },
   },
@@ -163,9 +248,53 @@ async function withLLM(
  * 先按连接词拆子句，每句独立做意图匹配。 */
 
 function parseClause(msg: string, ops: DesignOp[]): string | null {
-  // 材质
-  const m1 = msg.match(/(?:把|将)?([^换]{1,8}?)的?(?:地面|地板|地砖|墙面)?换成(.+)/);
-  if (m1 && /材质|地板|地砖|大理石|地毯|瓷砖|防滑|水磨石|灰色|白色|木|砖/.test(m1[2])) {
+  const parameter = msg.match(/(?:把|将)(?:(.{1,10}?)的)?(书架|书柜|柜子|衣柜|梳妆台|沙发)(?:的)?(层板|抽屉|座位|分格)(?:数量|数)?(?:改成|调整为|增加到|设为)(\d+)/);
+  if (parameter) {
+    const key = parameter[3] === '层板' ? 'shelves' : parameter[3] === '抽屉' ? 'drawers' : parameter[3] === '座位' ? 'seats' : 'compartments';
+    ops.push({ op: 'set_component_parameters', room: parameter[1]?.trim(), target: parameter[2], [key]: Number(parameter[4]) });
+    return '好的，我来调整组件结构参数。';
+  }
+  const wallColor = msg.match(/(?:把|将)(.{1,10}?)的?(?:墙面|墙壁)(?:颜色)?(?:改成|换成|设为)(#[\da-fA-F]{6}|浅灰色?|淡灰色?|灰色|深灰色?|米白色?|奶白色?|白色|浅蓝色?|天蓝色?|深蓝色?|浅绿色?|薄荷绿|绿色|深绿色?|粉色|红色|黄色|橙色|黑色|原木色?|棕色|咖色)/);
+  if (wallColor) {
+    ops.push({ op: 'set_wall_color', room: wallColor[1].trim(), query: wallColor[2] });
+    return '好的，我来调整墙面颜色。';
+  }
+  const color = msg.match(/(?:把|将)(?:(.{1,10}?)的)?(.+?)(?:颜色)?(?:改成|换成|设为)(#[\da-fA-F]{6}|浅灰色?|淡灰色?|灰色|深灰色?|米白色?|奶白色?|白色|浅蓝色?|天蓝色?|深蓝色?|浅绿色?|薄荷绿|绿色|深绿色?|粉色|红色|黄色|橙色|黑色|原木色?|棕色|咖色)/);
+  if (color && !/墙面|地面|地板|地砖/.test(color[2])) {
+    ops.push({ op: 'set_component_color', room: color[1]?.trim(), target: color[2].trim(), query: color[3] });
+    return '好的，我来调整组件颜色。';
+  }
+
+  const dimension = msg.match(/(?:把|将)(?:(.{1,10}?)的)?(.+?)(宽度|宽|深度|深|高度|高)(?:改成|调整为|改为|设为)(\d+(?:\.\d+)?\s*(?:mm|毫米|米|m))/i);
+  if (dimension) {
+    const value = parseWidthMm(dimension[4]);
+    if (value) {
+      const key = /宽/.test(dimension[3]) ? 'widthMm' : /深/.test(dimension[3]) ? 'depthMm' : 'heightMm';
+      ops.push({ op: 'resize_component', room: dimension[1]?.trim(), target: dimension[2].trim(), [key]: value });
+      return '好的，我来调整组件尺寸。';
+    }
+  }
+
+  const move = msg.match(/(?:把|将)(?:(.{1,10}?)的)?(.+?)(?:向|往)(左|右|上|下)(?:移动|挪动|平移)(\d+(?:\.\d+)?\s*(?:mm|毫米|米|m))/i);
+  if (move) {
+    const distance = parseWidthMm(move[4]);
+    if (distance) {
+      const signed = move[3] === '左' || move[3] === '上' ? -distance : distance;
+      ops.push({ op: 'move_component', room: move[1]?.trim(), target: move[2].trim(), dxMm: move[3] === '左' || move[3] === '右' ? signed : 0, dyMm: move[3] === '上' || move[3] === '下' ? signed : 0 });
+      return '好的，我来移动组件。';
+    }
+  }
+
+  const rotate = msg.match(/(?:把|将)(?:(.{1,10}?)的)?(.+?)(?:顺时针|逆时针)?旋转(\d+(?:\.\d+)?)\s*(?:度|°)/);
+  if (rotate) {
+    const direction = /逆时针/.test(msg) ? -1 : 1;
+    ops.push({ op: 'move_component', room: rotate[1]?.trim(), target: rotate[2].trim(), rotationDeltaDeg: Number(rotate[3]) * direction });
+    return '好的，我来旋转组件。';
+  }
+
+  // 材质只识别明确的地面目标，墙面材质目前不在本版本中
+  const m1 = msg.match(/(?:把|将)?(.{1,10}?)的?(?:地面|地板|地砖)(?:材质)?换成(.+)/);
+  if (m1) {
     ops.push({ op: 'set_floor_material', room: m1[1].trim() || undefined, query: m1[2].trim() });
     return '好的，我来更换地面材质。';
   }

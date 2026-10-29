@@ -8,6 +8,7 @@ import { applyCmds, type Cmd } from '@/core/commands';
 
 interface SceneState {
   doc: SceneDocument | null;
+  previewDoc: SceneDocument | null;
   past: SceneDocument[];
   future: SceneDocument[];
   /** 每次文档变化 +1，自动保存与拖拽绕行都依赖它 */
@@ -19,12 +20,14 @@ interface SceneState {
   undo: () => void;
   redo: () => void;
   hydrate: (doc: SceneDocument) => void;
+  setPreview: (doc: SceneDocument | null) => void;
 }
 
 const MAX_HISTORY = 120;
 
 export const useSceneStore = create<SceneState>((set, get) => ({
   doc: null,
+  previewDoc: null,
   past: [],
   future: [],
   rev: 0,
@@ -36,6 +39,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     if (!doc || !cmds.length) return;
     set({
       doc: applyCmds(doc, cmds),
+      previewDoc: null,
       past: [...past.slice(-(MAX_HISTORY - 1)), doc],
       future: [],
       rev: get().rev + 1,
@@ -47,16 +51,18 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     const { doc, past, future } = get();
     if (!doc || !past.length) return;
     const prev = past[past.length - 1];
-    set({ doc: prev, past: past.slice(0, -1), future: [doc, ...future], rev: get().rev + 1, lastAction: '撤销' });
+    set({ doc: prev, previewDoc: null, past: past.slice(0, -1), future: [doc, ...future], rev: get().rev + 1, lastAction: '撤销' });
   },
 
   redo: () => {
     const { doc, past, future } = get();
     if (!doc || !future.length) return;
     const next = future[0];
-    set({ doc: next, past: [...past, doc], future: future.slice(1), rev: get().rev + 1, lastAction: '重做' });
+    set({ doc: next, previewDoc: null, past: [...past, doc], future: future.slice(1), rev: get().rev + 1, lastAction: '重做' });
   },
 
   hydrate: (d) =>
-    set({ doc: d, past: [], future: [], rev: get().rev + 1, hydrated: true, lastAction: '' }),
+    set({ doc: d, previewDoc: null, past: [], future: [], rev: get().rev + 1, hydrated: true, lastAction: '' }),
+
+  setPreview: (previewDoc) => set({ previewDoc }),
 }));

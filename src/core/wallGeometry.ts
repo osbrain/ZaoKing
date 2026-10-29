@@ -2,7 +2,7 @@ import type { Level } from './types';
 
 /** Axis-aligned solids in plan coordinates (mm), with vertical bounds. */
 export interface WallSolid {
-  x0: number; y0: number; x1: number; y1: number; bottom: number; top: number;
+  x0: number; y0: number; x1: number; y1: number; bottom: number; top: number; color?: string;
 }
 
 function subtract(a: WallSolid, b: WallSolid): WallSolid[] {
@@ -13,8 +13,8 @@ function subtract(a: WallSolid, b: WallSolid): WallSolid[] {
   return [
     { ...a, x1: x0 }, { ...a, x0: x1 },
     { ...a, x0, x1, y1: y0 }, { ...a, x0, x1, y0: y1 },
-    { x0, y0, x1, y1, bottom: a.bottom, top: bottom },
-    { x0, y0, x1, y1, bottom: top, top: a.top },
+    { x0, y0, x1, y1, bottom: a.bottom, top: bottom, color: a.color },
+    { x0, y0, x1, y1, bottom: top, top: a.top, color: a.color },
   ].filter(s => s.x1 > s.x0 && s.y1 > s.y0 && s.top > s.bottom);
 }
 
@@ -34,8 +34,9 @@ export function buildWallSolids(level: Level, cutHeight = Infinity): WallSolid[]
       ? Math.min(y1, w.y1) > Math.max(y0, w.y0) && (Math.abs(w.x1 - x0) < 2 || Math.abs(w.x0 - x1) < 2 || (w.x0 <= x0 && w.x1 >= x1))
       : Math.min(x1, w.x1) > Math.max(x0, w.x0) && (Math.abs(w.y1 - y0) < 2 || Math.abs(w.y0 - y1) < 2 || (w.y0 <= y0 && w.y1 >= y1)));
     const top = adjacent.length ? Math.max(...adjacent.map(w => w.height)) : 2800;
+    const color = adjacent.find((wall) => wall.color)?.color;
     return walls.reduce((parts, wall) => parts.flatMap(p => subtract(p, wall)),
-      [{ x0, y0, x1, y1, bottom: 0, top }] as WallSolid[]);
+      [{ x0, y0, x1, y1, bottom: 0, top, color }] as WallSolid[]);
   });
   return [...walls, ...infills].flatMap(wall =>
     cuts.reduce((parts, cut) => parts.flatMap(p => subtract(p, cut)), [wall] as WallSolid[])

@@ -139,10 +139,10 @@ export function resolveAssetByQuery(query: string, projectAssets: readonly Asset
 
 /** "1.8米" / "1800mm" → mm */
 export function parseWidthMm(text: string): number | null {
-  const m = text.match(/(\d+(?:\.\d+)?)\s*[米mM]/);
+  const mm = text.match(/(\d+(?:\.\d+)?)\s*(?:mm|毫米)/i);
+  if (mm) return Math.round(parseFloat(mm[1]));
+  const m = text.match(/(\d+(?:\.\d+)?)\s*(?:米|m)(?!m)/i);
   if (m) return Math.round(parseFloat(m[1]) * 1000);
-  const mm = text.match(/(\d{3,4})\s*mm/i);
-  if (mm) return parseInt(mm[1], 10);
   return null;
 }
 

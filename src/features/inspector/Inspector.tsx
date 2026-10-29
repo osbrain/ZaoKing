@@ -65,6 +65,7 @@ export function PropsPanel() {
     if (!inst) return <EmptyHint />;
     const asset = assetById(inst.assetId, doc.assets);
     const ref = instanceRef(inst, asset);
+    const customParameters = asset?.geometry?.parameters;
     return (
       <div className="space-y-4 p-4">
         <div>
@@ -89,6 +90,18 @@ export function PropsPanel() {
         {asset?.type === 'custom' && (
           <NumberField min={10} max={20000} label="高 (mm)" value={ref.h}
             onCommit={(h) => run('调整高度', [{ levelId: level.id, type: 'resize', id: inst.id, size: { h } }])} />
+        )}
+        {asset?.type === 'custom' && customParameters && Object.keys(customParameters).length > 0 && (
+          <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3">
+            {([
+              ['compartments', '分格数量', 1, 8], ['shelves', '层板数量', 0, 12],
+              ['drawers', '抽屉数量', 1, 8], ['seats', '座位数量', 1, 5],
+            ] as const).filter(([key]) => customParameters[key] !== undefined).map(([key, label, min, max]) => (
+              <NumberField key={key} min={min} max={max} label={label}
+                value={inst.parameters?.[key] ?? customParameters[key]!}
+                onCommit={(value) => run('调整组件结构参数', [{ type: 'setParameters', id: inst.id, parameters: { [key]: value } }])} />
+            ))}
+          </div>
         )}
 
         <label className="flex items-center justify-between text-[11px] text-zinc-500">
@@ -228,6 +241,11 @@ export function PropsPanel() {
             <option value="partition">非承重墙</option>
             <option value="low">矮墙</option>
           </select>
+        </label>
+        <label className="flex items-center justify-between text-[11px] text-zinc-500">
+          墙体颜色
+          <input type="color" value={w.color ?? '#a7a195'} onChange={(event) => run('设置墙面颜色', [{ type: 'setWall', id: w.id, color: event.target.value }])}
+            className="h-7 w-14 cursor-pointer rounded border border-zinc-200" />
         </label>
         <p className="text-[11px] text-zinc-400">墙上门窗：{onWall.length ? onWall.map((o) => (o.kind === 'window' ? '窗' : '门')).join('、') : '无'}</p>
         <p className="text-[11px] leading-relaxed text-zinc-400">提示：拖动墙身整体移动（墙上门窗跟随）；拖动端点调整长度；Delete 删除。</p>

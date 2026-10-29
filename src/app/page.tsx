@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createProject, fetchProjects, type ProjectInfo, type ProjectTemplate } from '@/lib/api';
+import FloorplanImportPanel from '@/features/floorplan-import/FloorplanImportPanel';
+import type { ImportReport } from '@/core/floorplanImport';
+import type { SceneDocument } from '@/core/types';
+
+type NewProjectMode = ProjectTemplate | 'image';
 
 export default function HomePage() {
   const router = useRouter();
@@ -14,8 +19,17 @@ export default function HomePage() {
   /* 新建对话框状态 */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
-  const [template, setTemplate] = useState<ProjectTemplate>('blank');
+  const [template, setTemplate] = useState<NewProjectMode>('blank');
   const [creating, setCreating] = useState(false);
+  const [importedDocument, setImportedDocument] = useState<SceneDocument | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const onImportDocumentChange = useCallback((document: SceneDocument | null, report: ImportReport | null, message: string | null) => {
+    setImportedDocument(document);
+    setImportReport(report);
+    setImportError(message);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -30,9 +44,12 @@ export default function HomePage() {
   }, [router]);
 
   const onCreate = async () => {
+    if (template === 'image' && !importedDocument) return;
     setCreating(true);
     try {
-      const p = await createProject(name.trim() || undefined, template);
+      const selectedTemplate: ProjectTemplate = template === 'sample' ? 'sample' : 'blank';
+      const document = template === 'image' ? importedDocument ?? undefined : undefined;
+      const p = await createProject(name.trim() || undefined, selectedTemplate, document);
       router.push(`/editor/${p.id}`);
     } catch {
       setError('创建失败');
@@ -114,7 +131,7 @@ export default function HomePage() {
           onClick={() => !creating && setDialogOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold">新建项目</h2>
@@ -133,7 +150,7 @@ export default function HomePage() {
             <p className="mb-2 mt-4 text-xs text-zinc-500">起始户型</p>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setTemplate('blank')}
+                onClick={() => { setTemplate('blank'); setImportedDocument(null); setImportReport(null); setImportError(null); }}
                 className={`rounded-xl border p-4 text-left transition ${
                   template === 'blank' ? 'border-accent bg-accent-soft' : 'border-zinc-200 hover:border-zinc-300'
                 }`}
@@ -144,7 +161,7 @@ export default function HomePage() {
                 </p>
               </button>
               <button
-                onClick={() => setTemplate('sample')}
+                onClick={() => { setTemplate('sample'); setImportedDocument(null); setImportReport(null); setImportError(null); }}
                 className={`rounded-xl border p-4 text-left transition ${
                   template === 'sample' ? 'border-accent bg-accent-soft' : 'border-zinc-200 hover:border-zinc-300'
                 }`}
@@ -156,6 +173,24 @@ export default function HomePage() {
               </button>
             </div>
 
+            <button
+              onClick={() => { setTemplate('image'); setImportedDocument(null); setImportReport(null); setImportError(null); }}
+              className={`mt-3 w-full rounded-lg border p-4 text-left transition ${template === 'image' ? 'border-accent bg-accent-soft' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}
+            >
+              <p className="text-sm font-medium">▧ 根据户型截图导入</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">上传现有平面图，识别墙体、房间和门窗后校准尺寸。</p>
+            </button>
+
+            {template === 'image' && <FloorplanImportPanel projectName={name.trim() || '截图户型'} visionEnabled={aiMode === 'llm'} onDocumentChange={onImportDocumentChange} />}
+            {template === 'image' && importReport && (
+              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900">
+                已生成预览：{importReport.walls} 段墙、{importReport.openings} 个门窗、{importReport.rooms} 个房间。
+                {importReport.dropped > 0 && <span> 已忽略 {importReport.dropped} 个无法自动规整的对象，请检查下方提示。</span>}
+                {importReport.warnings.length > 0 && <ul className="mt-1 list-inside list-disc">{importReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
+              </div>
+            )}
+            {template === 'image' && importError && <p role="alert" className="mt-2 text-xs text-red-700">{importError}</p>}
+
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => setDialogOpen(false)}
@@ -166,7 +201,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={onCreate}
-                disabled={creating}
+                disabled={creating || (template === 'image' && !importedDocument)}
                 className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
               >
                 {creating ? '创建中…' : '创建并进入编辑器'}

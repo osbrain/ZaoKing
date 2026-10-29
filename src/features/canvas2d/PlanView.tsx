@@ -110,7 +110,7 @@ interface DragState { id: string; x: number; y: number; rot: number }
 interface WallEdit { id: string; dx?: number; dy?: number; rect?: Rect }
 
 export default function PlanView() {
-  const doc = useSceneStore((s) => s.doc);
+  const doc = useSceneStore((s) => s.previewDoc ?? s.doc);
   const run = useSceneStore((s) => s.run);
   const camera = useEditorStore((s) => s.camera);
   const setCamera = useEditorStore((s) => s.setCamera);
@@ -619,11 +619,11 @@ const WallsLayer = React.memo(function WallsLayer({
           if (wallEdit.rect) [x0, y0, x1, y1] = wallEdit.rect;
           else { x0 += wallEdit.dx ?? 0; y0 += wallEdit.dy ?? 0; x1 += wallEdit.dx ?? 0; y1 += wallEdit.dy ?? 0; }
         }
-        const fill =
+        const fill = w.color ?? (
           w.kind === 'bearing' ? '#26241f'
           : w.kind === 'low' ? '#e9e3d8'
           : w.kind === 'exterior' ? '#8f897d'
-          : '#a7a195';
+          : '#a7a195');
         return (
           <rect
             key={w.id}
