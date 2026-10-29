@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { createProject, fetchProjects, type AiProviderName, type ProjectInfo, type ProjectTemplate } from '@/lib/api';
-import FloorplanImportPanel from '@/features/floorplan-import/FloorplanImportPanel';
-import type { ImportReport } from '@/core/floorplanImport';
-import type { SceneDocument } from '@/core/types';
+import { deleteProject, fetchProjects, renameProject, type AiProviderName, type ProjectInfo } from '@/lib/api';
+import NewProjectDialog from '@/features/dashboard/NewProjectDialog';
+import ProjectActionDialog, { type ProjectAction } from '@/features/dashboard/ProjectActionDialog';
+import ProjectCard from '@/features/dashboard/ProjectCard';
 
-type NewProjectMode = ProjectTemplate | 'image';
+type SortOrder = 'updated-desc' | 'updated-asc' | 'name-asc';
+type PendingProjectAction = { project: ProjectInfo; action: ProjectAction } | null;
+const PAGE_SIZE = 12;
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,201 +17,186 @@ export default function HomePage() {
   const [aiProvider, setAiProvider] = useState<AiProviderName | null>(null);
   const [visionEnabled, setVisionEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('updated-desc');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [pendingAction, setPendingAction] = useState<PendingProjectAction>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  /* 新建对话框状态 */
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [template, setTemplate] = useState<NewProjectMode>('blank');
-  const [creating, setCreating] = useState(false);
-  const [importedDocument, setImportedDocument] = useState<SceneDocument | null>(null);
-  const [importReport, setImportReport] = useState<ImportReport | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
 
-  const onImportDocumentChange = useCallback((document: SceneDocument | null, report: ImportReport | null, message: string | null) => {
-    setImportedDocument(document);
-    setImportReport(report);
-    setImportError(message);
+  const loadProjects = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setRefreshing(true);
+    setError(null);
+    try {
+      const result = await fetchProjects();
+      setProjects(result.projects);
+      setAiProvider(result.aiProvider);
+      setVisionEnabled(result.visionEnabled);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '加载失败');
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { projects: list, aiProvider: provider, visionEnabled: canUseVision } = await fetchProjects();
-        setAiProvider(provider);
-        setVisionEnabled(canUseVision);
-        setProjects(list);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : '加载失败');
-      }
-    })();
-  }, [router]);
+  useEffect(() => { void loadProjects(); }, [loadProjects]);
 
-  const onCreate = async () => {
-    if (template === 'image' && !importedDocument) return;
-    setCreating(true);
-    try {
-      const selectedTemplate: ProjectTemplate = template === 'sample' ? 'sample' : 'blank';
-      const document = template === 'image' ? importedDocument ?? undefined : undefined;
-      const p = await createProject(name.trim() || undefined, selectedTemplate, document);
-      router.push(`/editor/${p.id}`);
-    } catch {
-      setError('创建失败');
-      setCreating(false);
+  const visibleProjects = useMemo(() => {
+    if (!projects) return [];
+    const query = search.trim().toLocaleLowerCase();
+    return projects
+      .filter((project) => !query || project.name.toLocaleLowerCase().includes(query))
+      .sort((a, b) => {
+        if (sortOrder === 'name-asc') return a.name.localeCompare(b.name, 'zh-CN');
+        const delta = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        return sortOrder === 'updated-desc' ? delta : -delta;
+      });
+  }, [projects, search, sortOrder]);
+
+  useEffect(() => setVisibleCount(PAGE_SIZE), [search, sortOrder]);
+
+  const confirmProjectAction = async (nextName?: string) => {
+    if (!pendingAction) return;
+    const { project, action } = pendingAction;
+    if (action === 'rename') {
+      const updated = await renameProject(project.id, nextName ?? '');
+      setProjects((current) => current?.map((item) => item.id === project.id ? { ...item, ...updated } : item) ?? null);
+      return;
     }
+    await deleteProject(project.id);
+    setProjects((current) => current?.filter((item) => item.id !== project.id) ?? null);
   };
 
-  if (error) {
-    return (
-      <main className="flex h-dvh items-center justify-center">
-        <div className="text-center">
-          <p className="text-lg font-medium">加载失败：{error}</p>
-          <p className="mt-2 text-sm text-zinc-500">请确认已执行 npm run db:push 初始化数据库</p>
-        </div>
-      </main>
-    );
-  }
+  const aiStatus = aiProvider === 'deepseek'
+    ? 'DeepSeek 已连接'
+    : aiProvider === 'openai'
+      ? 'OpenAI 已连接'
+      : '离线规则模式';
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-12">
-      <header className="mb-10 flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-wide">
-            ZaoKing <span className="font-normal text-zinc-500">室内设计工作台</span>
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            2D 户型 · 3D 场景 · AI 自然语言编辑
-            {aiProvider === 'deepseek' ? ' · AI：DeepSeek 模式' : aiProvider === 'openai' ? ' · AI：OpenAI 模式' : ' · AI：离线规则模式（配置 DEEPSEEK_API_KEY 启用 DeepSeek）'}
-          </p>
-        </div>
-        <button
-          onClick={() => setDialogOpen(true)}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
-          ＋ 新建项目
-        </button>
-      </header>
-
-      {projects !== null && projects.length === 0 && (
-        <div className="mb-8 rounded-xl border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
-          还没有项目 —— 点击右上角「新建项目」，选择
-          <b className="text-ink">空白户型</b>从零绘制自己的家，或用<b className="text-ink">示例户型</b>直接体验。
-        </div>
-      )}
-
-      {projects === null ? (
-        <p className="text-sm text-zinc-400">加载中…</p>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((p) => (
-            <Link
-              key={p.id}
-              href={`/editor/${p.id}`}
-              className="group rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-accent hover:shadow-md"
-            >
-              <div className="mb-6 flex h-28 items-center justify-center overflow-hidden rounded-lg border border-zinc-100 bg-[#f7f4ee]">
-                {p.thumbSvg ? (
-                  <div
-                    className="h-full w-full [&_svg]:block [&_svg]:h-full [&_svg]:w-full"
-                    dangerouslySetInnerHTML={{ __html: p.thumbSvg }}
-                  />
-                ) : (
-                  <span className="text-2xl text-zinc-300 transition group-hover:text-accent">✏️ 空白户型</span>
-                )}
-              </div>
-              <p className="font-medium">{p.name}</p>
-              <p className="mt-1 text-xs text-zinc-400">
-                更新于 {new Date(p.updatedAt).toLocaleString('zh-CN')}
-              </p>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* 新建项目对话框 */}
-      {dialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-          onClick={() => !creating && setDialogOpen(false)}
-        >
-          <div
-            className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold">新建项目</h2>
-            <p className="mt-1 text-xs text-zinc-400">创建后进入编辑器，可随时调整户型与布置</p>
-
-            <label className="mt-5 flex flex-col gap-1 text-xs text-zinc-500">
-              项目名称（可留空自动命名）
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="例如：我家 89㎡ 两室一厅"
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-ink outline-none focus:border-accent"
-              />
-            </label>
-
-            <p className="mb-2 mt-4 text-xs text-zinc-500">起始户型</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => { setTemplate('blank'); setImportedDocument(null); setImportReport(null); setImportError(null); }}
-                className={`rounded-xl border p-4 text-left transition ${
-                  template === 'blank' ? 'border-accent bg-accent-soft' : 'border-zinc-200 hover:border-zinc-300'
-                }`}
-              >
-                <p className="text-sm font-medium">✏️ 空白户型</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                  从零开始：画墙、开门窗、画房间，绘制你自己家的户型
-                </p>
-              </button>
-              <button
-                onClick={() => { setTemplate('sample'); setImportedDocument(null); setImportReport(null); setImportError(null); }}
-                className={`rounded-xl border p-4 text-left transition ${
-                  template === 'sample' ? 'border-accent bg-accent-soft' : 'border-zinc-200 hover:border-zinc-300'
-                }`}
-              >
-                <p className="text-sm font-medium">🏠 示例户型</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                  三室两厅两卫完整布置，可拆改调整，适合快速体验
-                </p>
-              </button>
-            </div>
-
-            <button
-              onClick={() => { setTemplate('image'); setImportedDocument(null); setImportReport(null); setImportError(null); }}
-              className={`mt-3 w-full rounded-lg border p-4 text-left transition ${template === 'image' ? 'border-accent bg-accent-soft' : 'border-zinc-200 bg-white hover:border-zinc-300'}`}
-            >
-              <p className="text-sm font-medium">▧ 根据户型截图导入</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">上传现有平面图，识别墙体、房间和门窗后校准尺寸。</p>
-            </button>
-
-            {template === 'image' && <FloorplanImportPanel projectName={name.trim() || '截图户型'} visionEnabled={visionEnabled} onDocumentChange={onImportDocumentChange} />}
-            {template === 'image' && importReport && (
-              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900">
-                已生成预览：{importReport.walls} 段墙、{importReport.openings} 个门窗、{importReport.rooms} 个房间。
-                {importReport.dropped > 0 && <span> 已忽略 {importReport.dropped} 个无法自动规整的对象，请检查下方提示。</span>}
-                {importReport.warnings.length > 0 && <ul className="mt-1 list-inside list-disc">{importReport.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
-              </div>
-            )}
-            {template === 'image' && importError && <p role="alert" className="mt-2 text-xs text-red-700">{importError}</p>}
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                onClick={() => setDialogOpen(false)}
-                disabled={creating}
-                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50 disabled:opacity-40"
-              >
-                取消
-              </button>
-              <button
-                onClick={onCreate}
-                disabled={creating || (template === 'image' && !importedDocument)}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
-              >
-                {creating ? '创建中…' : '创建并进入编辑器'}
-              </button>
+    <main className="min-h-dvh bg-[#f7f8fa] text-ink">
+      <header className="border-b border-zinc-200 bg-white">
+        <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded bg-accent text-sm font-semibold text-white" aria-hidden="true">Z</div>
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-semibold">ZaoKing <span className="font-normal text-zinc-500">室内设计工作台</span></h1>
             </div>
           </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="hidden items-center gap-1.5 text-[11px] text-zinc-500 sm:flex">
+              <span className={`h-1.5 w-1.5 rounded-full ${aiProvider ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+              AI：{aiStatus}{!aiProvider && '（配置 DEEPSEEK_API_KEY 启用）'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              className="h-9 rounded bg-accent px-3.5 text-xs font-medium text-white hover:opacity-90"
+            >
+              ＋ 新建项目
+            </button>
+          </div>
         </div>
+      </header>
+
+      <section className="mx-auto max-w-6xl px-5 py-7 sm:px-8 sm:py-9">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">我的项目</h2>
+            <p className="mt-1 text-xs text-zinc-500">管理户型方案与室内设计</p>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <label className="relative min-w-[200px] flex-1 sm:w-64 sm:flex-none">
+              <span className="sr-only">搜索项目</span>
+              <span aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400">⌕</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="搜索项目名称"
+                className="h-9 w-full rounded border border-zinc-200 bg-white pl-8 pr-8 text-xs outline-none focus:border-accent"
+              />
+              {search && <button type="button" aria-label="清除搜索" onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 px-1 text-sm text-zinc-400 hover:text-ink">×</button>}
+            </label>
+            <label>
+              <span className="sr-only">项目排序</span>
+              <select
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as SortOrder)}
+                className="h-9 rounded border border-zinc-200 bg-white px-2.5 text-xs text-zinc-600 outline-none focus:border-accent"
+              >
+                <option value="updated-desc">最近更新</option>
+                <option value="updated-asc">最早更新</option>
+                <option value="name-asc">名称排序</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => void loadProjects(true)}
+              disabled={refreshing}
+              title="刷新项目列表"
+              aria-label="刷新项目列表"
+              className="grid h-9 w-9 place-items-center rounded border border-zinc-200 bg-white text-sm text-zinc-500 hover:bg-zinc-50 disabled:opacity-50"
+            >
+              <span className={refreshing ? 'animate-spin' : ''} aria-hidden="true">↻</span>
+            </button>
+          </div>
+        </div>
+
+        {error ? (
+          <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+            <span>{error}</span>
+            <button type="button" onClick={() => void loadProjects(true)} className="rounded border border-red-200 bg-white px-3 py-1.5 font-medium hover:bg-red-100">重试</button>
+          </div>
+        ) : projects === null ? (
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => <div key={index} className="h-56 animate-pulse rounded-lg border border-zinc-200 bg-white" />)}
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="mt-8 flex min-h-64 flex-col items-center justify-center border-y border-dashed border-zinc-300 px-6 text-center">
+            <div className="grid h-11 w-11 place-items-center rounded-full bg-white text-lg text-zinc-400">⌂</div>
+            <h3 className="mt-3 text-sm font-medium">从一个户型开始</h3>
+            <p className="mt-1 max-w-sm text-xs leading-5 text-zinc-500">新建空白户型、体验示例方案，或上传户型截图生成初始设计。</p>
+            <button type="button" onClick={() => setDialogOpen(true)} className="mt-4 h-9 rounded bg-accent px-3.5 text-xs font-medium text-white hover:opacity-90">新建第一个项目</button>
+          </div>
+        ) : visibleProjects.length === 0 ? (
+          <div className="mt-8 flex min-h-52 flex-col items-center justify-center border-y border-zinc-200 text-center">
+            <p className="text-sm font-medium">没有找到匹配的项目</p>
+            <p className="mt-1 text-xs text-zinc-500">检查项目名称，或清除搜索条件。</p>
+            <button type="button" onClick={() => setSearch('')} className="mt-3 rounded px-3 py-1.5 text-xs text-accent hover:bg-accent-soft">清除搜索</button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-3 mt-5 text-[11px] text-zinc-400">{search ? `找到 ${visibleProjects.length} 个项目` : `共 ${projects.length} 个项目`}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleProjects.slice(0, visibleCount).map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onRename={(item) => setPendingAction({ project: item, action: 'rename' })}
+                  onDelete={(item) => setPendingAction({ project: item, action: 'delete' })}
+                />
+              ))}
+            </div>
+            {visibleCount < visibleProjects.length && (
+              <div className="mt-5 flex justify-center">
+                <button type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)} className="h-9 rounded border border-zinc-200 bg-white px-4 text-xs text-zinc-600 hover:bg-zinc-50">加载更多项目</button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {dialogOpen && <NewProjectDialog visionEnabled={visionEnabled} onClose={() => setDialogOpen(false)} onCreated={(projectId) => router.push(`/editor/${projectId}`)} />}
+
+      {pendingAction && (
+        <ProjectActionDialog
+          key={`${pendingAction.action}:${pendingAction.project.id}`}
+          project={pendingAction.project}
+          action={pendingAction.action}
+          onClose={() => setPendingAction(null)}
+          onConfirm={confirmProjectAction}
+        />
       )}
     </main>
   );

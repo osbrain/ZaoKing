@@ -35,6 +35,23 @@ export async function createProject(name?: string, template: ProjectTemplate = '
   return j.project;
 }
 
+export async function renameProject(projectId: string, name: string): Promise<ProjectInfo> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  const payload = await res.json().catch(() => null) as { project?: ProjectInfo; error?: string } | null;
+  if (!res.ok || !payload?.project) throw new Error(payload?.error ?? '重命名失败');
+  return payload.project;
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' });
+  const payload = await res.json().catch(() => null) as { error?: string } | null;
+  if (!res.ok) throw new Error(payload?.error ?? '删除项目失败');
+}
+
 export async function fetchDesign(projectId: string): Promise<{ version: number; document: SceneDocument }> {
   const res = await fetch(`/api/designs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('设计文档加载失败');
