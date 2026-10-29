@@ -5,6 +5,8 @@ export interface ProjectInfo {
   name: string;
   updatedAt: string;
   designCount?: number;
+  /** 服务端生成的户型 2D 缩略图 SVG；空户型为空串 */
+  thumbSvg?: string;
 }
 
 export async function fetchProjects(): Promise<{ projects: ProjectInfo[]; aiMode: 'llm' | 'rules' }> {

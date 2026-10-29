@@ -88,8 +88,15 @@ export default function HomePage() {
               href={`/editor/${p.id}`}
               className="group rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-accent hover:shadow-md"
             >
-              <div className="mb-6 flex h-28 items-center justify-center rounded-lg bg-zinc-50 text-3xl text-zinc-300 group-hover:text-accent">
-                ◧
+              <div className="mb-6 flex h-28 items-center justify-center overflow-hidden rounded-lg border border-zinc-100 bg-[#f7f4ee]">
+                {p.thumbSvg ? (
+                  <div
+                    className="h-full w-full [&_svg]:block [&_svg]:h-full [&_svg]:w-full"
+                    dangerouslySetInnerHTML={{ __html: p.thumbSvg }}
+                  />
+                ) : (
+                  <span className="text-2xl text-zinc-300 transition group-hover:text-accent">✏️ 空白户型</span>
+                )}
               </div>
               <p className="font-medium">{p.name}</p>
               <p className="mt-1 text-xs text-zinc-400">

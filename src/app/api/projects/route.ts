@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
+import { planThumbSvg } from '@/core/thumbnail';
+import type { SceneDocument } from '@/core/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,17 +10,29 @@ export async function GET() {
   const projects = await prisma.project.findMany({
     orderBy: { updatedAt: 'desc' },
     include: {
-      designs: { orderBy: { updatedAt: 'desc' }, take: 1, select: { updatedAt: true } },
+      designs: { orderBy: { updatedAt: 'desc' }, take: 1 },
       _count: { select: { designs: true } },
     },
   });
   return NextResponse.json({
-    projects: projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      updatedAt: new Date(Math.max(p.updatedAt.getTime(), p.designs[0]?.updatedAt.getTime() ?? 0)).toISOString(),
-      designCount: p._count.designs,
-    })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    projects: projects.map((p) => {
+      let thumbSvg = '';
+      const document = p.designs[0]?.document;
+      if (document) {
+        try {
+          thumbSvg = planThumbSvg(JSON.parse(document) as SceneDocument, `t${p.id.slice(-8)}`);
+        } catch {
+          thumbSvg = '';
+        }
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        updatedAt: new Date(Math.max(p.updatedAt.getTime(), p.designs[0]?.updatedAt.getTime() ?? 0)).toISOString(),
+        designCount: p._count.designs,
+        thumbSvg,
+      };
+    }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     aiMode: process.env.OPENAI_API_KEY ? 'llm' : 'rules',
   });
 }
