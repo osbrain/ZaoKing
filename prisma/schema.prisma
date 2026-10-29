@@ -11,11 +11,12 @@ datasource db {
 }
 
 model Project {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  designs   Design[]
+  id            String             @id @default(cuid())
+  name          String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  designs       Design[]
+  conversations ChatConversation[]
 }
 
 model Design {
@@ -28,4 +29,27 @@ model Design {
   updatedAt DateTime @updatedAt
 
   @@index([projectId, updatedAt])
+}
+
+model ChatConversation {
+  id        String        @id @default(cuid())
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String        @default("新对话")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@index([projectId, updatedAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId, createdAt])
 }

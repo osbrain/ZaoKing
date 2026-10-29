@@ -60,6 +60,55 @@ export async function saveDesign(
 export interface ChatMsg {
   role: 'user' | 'assistant';
   content: string;
+  id?: string;
+  createdAt?: string;
+}
+
+export interface ChatConversationInfo {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+async function chatRequest<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const payload = await response.json().catch(() => null) as { error?: string } | null;
+  if (!response.ok) throw new Error(payload?.error ?? '聊天记录请求失败');
+  return payload as T;
+}
+
+export async function fetchChatConversations(projectId: string): Promise<ChatConversationInfo[]> {
+  const result = await chatRequest<{ conversations: ChatConversationInfo[] }>(`/api/chat?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+  return result.conversations;
+}
+
+export async function createChatConversation(projectId: string): Promise<ChatConversationInfo> {
+  const result = await chatRequest<{ conversation: ChatConversationInfo }>('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  });
+  return result.conversation;
+}
+
+export async function fetchChatMessages(projectId: string, conversationId: string): Promise<ChatMsg[]> {
+  const result = await chatRequest<{ messages: ChatMsg[] }>(`/api/chat/${encodeURIComponent(conversationId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+  return result.messages;
+}
+
+export async function appendChatMessage(projectId: string, conversationId: string, message: ChatMsg): Promise<ChatMsg> {
+  const result = await chatRequest<{ message: ChatMsg }>(`/api/chat/${encodeURIComponent(conversationId)}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId, role: message.role, content: message.content }),
+  });
+  return result.message;
+}
+
+export async function deleteChatConversation(projectId: string, conversationId: string): Promise<void> {
+  await chatRequest(`/api/chat/${encodeURIComponent(conversationId)}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' });
 }
 
 export async function askAi(

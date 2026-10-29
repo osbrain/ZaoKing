@@ -272,7 +272,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rightTab === 'props' && <PropsPanel />}
-            {rightTab === 'ai' && <ChatPanel />}
+            {rightTab === 'ai' && <ChatPanel projectId={projectId} />}
             {rightTab === 'stats' && <StatsPanel />}
           </div>
         </aside>
@@ -299,7 +299,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {rightTab === 'props' && <PropsPanel />}
-          {rightTab === 'ai' && <ChatPanel />}
+          {rightTab === 'ai' && <ChatPanel projectId={projectId} />}
           {rightTab === 'stats' && <StatsPanel />}
         </div>
       </aside>
