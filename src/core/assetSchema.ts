@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { CustomShape } from './types';
+import { HexColorSchema } from './schemaPrimitives';
 
 export const CustomShapeSchema = z.enum([
   'box', 'cylinder', 'cabinet', 'wallCabinet', 'wardrobe', 'bookcase', 'dresser', 'tvConsole', 'vanity', 'kitchenIsland',
@@ -27,7 +28,7 @@ export const AssetDefinitionSchema = z.object({
   w: z.number().finite().min(10, '尺寸不能小于 10 mm').max(20000, '尺寸不能大于 20000 mm'),
   d: z.number().finite().min(10, '尺寸不能小于 10 mm').max(20000, '尺寸不能大于 20000 mm'),
   h: z.number().finite().min(10, '尺寸不能小于 10 mm').max(20000, '尺寸不能大于 20000 mm'),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, '请选择有效颜色'),
+  color: HexColorSchema,
   tags: z.array(z.string().trim().min(1).max(60)).max(20),
   geometry: GeometrySchema.optional(),
 }).strict();

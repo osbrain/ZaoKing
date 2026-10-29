@@ -3,6 +3,7 @@ import { isSimplePolygon } from './geometry';
 import { AssetDefinitionSchema, CustomAssetSchema } from './assetSchema';
 import { assetCatalog, materialCatalog } from './assets';
 import { MaterialSchema } from './materialSchema';
+import { HexColorSchema } from './schemaPrimitives';
 
 const MAX_COORDINATE_MM = 1_000_000;
 const coordinate = z.number().finite().min(-MAX_COORDINATE_MM).max(MAX_COORDINATE_MM);
@@ -24,7 +25,7 @@ const wallSchema = z.object({
   y1: coordinate,
   kind: z.enum(['bearing', 'exterior', 'partition', 'low']),
   height: positiveMeasure,
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: HexColorSchema.optional(),
 }).strict().superRefine((wall, ctx) => {
   if (wall.x0 >= wall.x1 || wall.y0 >= wall.y1) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Wall bounds must have positive width and height' });
@@ -77,7 +78,7 @@ const componentInstanceSchema = z.object({
     drawers: z.number().int().min(1).max(8).optional(),
     seats: z.number().int().min(1).max(5).optional(),
   }).strict().refine((parameters) => Object.keys(parameters).length > 0, 'At least one parameter override is required').optional(),
-  color: z.string().trim().min(1).max(64).optional(),
+  color: HexColorSchema.optional(),
   locked: z.boolean().optional(),
 }).strict();
 

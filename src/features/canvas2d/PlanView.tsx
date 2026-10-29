@@ -11,7 +11,7 @@ import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore, type Selection, type Tool, type WallPreset } from '@/stores/editorStore';
 import type { Cmd } from '@/core/commands';
 import { assetById, materialById, materialCatalog } from '@/core/assets';
-import { instanceRef, uid, type Asset, type ComponentInstance, type Level, type Material, type Opening, type Vec2, type Wall } from '@/core/types';
+import { instanceGeometry, instanceRef, uid, type Asset, type ComponentInstance, type Level, type Material, type Opening, type Vec2, type Wall } from '@/core/types';
 import { docBBox, polyArea } from '@/core/geometry';
 import { dimensionLayout, dimsSvg, furnSVG, materialPatternId, openingsSvg, patternsDefs } from '@/core/symbols2d';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
@@ -721,6 +721,7 @@ const FurnLayer = React.memo(function FurnLayer({
       {level.instances.map((inst) => {
         const asset = assetById(inst.assetId, assets);
         const ref = instanceRef(inst, asset);
+        const geometry = instanceGeometry(inst, asset);
         const t = drag && drag.id === inst.id ? drag : inst.t;
         return (
           <g
@@ -729,7 +730,7 @@ const FurnLayer = React.memo(function FurnLayer({
             className={interactive ? 'cursor-move' : ''}
             onPointerDown={interactive ? (e) => onDown(inst, e) : undefined}
           >
-            <g dangerouslySetInnerHTML={{ __html: furnSVG(ref.type, ref.w, ref.d, ref.color, asset?.geometry) }} />
+            <g dangerouslySetInnerHTML={{ __html: furnSVG(ref.type, ref.w, ref.d, ref.color, geometry) }} />
             {Math.min(ref.w, ref.d) >= 380 && !NOLABEL.includes(ref.type) && (
               <text transform={`rotate(${-t.rot})`} fontSize={Math.max(80, Math.min(170, Math.min(ref.w, ref.d) * 0.2))}
                 textAnchor="middle" dominantBaseline="central" fill="#4a443c" opacity={0.8} pointerEvents="none">{ref.name}</text>

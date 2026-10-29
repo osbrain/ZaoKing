@@ -2,11 +2,9 @@
 
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { parseDesignPackage, serializeDesignPackage, type ParsedDesignPackage } from '@/core/designPackage';
+import { MAX_DESIGN_PACKAGE_BYTES, parseDesignPackage, serializeDesignPackage, type ParsedDesignPackage } from '@/core/designPackage';
 import { createProject } from '@/lib/api';
 import type { SceneDocument } from '@/core/types';
-
-const MAX_PACKAGE_BYTES = 15 * 1024 * 1024;
 
 function safeFileName(name: string) {
   return name.trim().replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g, '-').slice(0, 80) || 'zaoking-design';
@@ -53,7 +51,7 @@ export default function DesignPackageControls({ document }: { document: SceneDoc
     setError('');
     setImported(null);
     if (!file) return;
-    if (file.size > MAX_PACKAGE_BYTES) {
+    if (file.size > MAX_DESIGN_PACKAGE_BYTES) {
       setError('文件不能超过 15 MB');
       return;
     }

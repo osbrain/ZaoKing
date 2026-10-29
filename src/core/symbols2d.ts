@@ -37,7 +37,7 @@ const pa = (d: string, f = 'none', ex = '') => `<path d="${d}" fill="${f}" ${ST}
 /* ---------- 地面材质 patterns（prefix 用于同页多 SVG 时避免 ID 冲突） ---------- */
 
 export const materialPatternId = (id: string, prefix = '') =>
-  `${prefix}m-${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  `${prefix}m-${Array.from(id, (character) => character.codePointAt(0)!.toString(16)).join('-') || 'empty'}`;
 
 export function patternsDefs(prefix = '', materials: readonly Material[] = MATERIALS): string {
   const patterns = materials.map((material) => {

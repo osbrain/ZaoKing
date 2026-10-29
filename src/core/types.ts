@@ -171,6 +171,18 @@ export function instanceRef(
   };
 }
 
+export function instanceGeometry(
+  inst: ComponentInstance,
+  asset: Asset | undefined,
+): CustomGeometry | undefined {
+  if (!asset?.geometry) return undefined;
+  if (!inst.parameters) return asset.geometry;
+  return {
+    ...asset.geometry,
+    parameters: { ...asset.geometry.parameters, ...inst.parameters },
+  };
+}
+
 let _n = 1;
 export const uid = (prefix = 'i') =>
   `${prefix}${Date.now().toString(36)}${(_n++).toString(36)}`;

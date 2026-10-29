@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dimensionLayout, dimsSvg } from './symbols2d';
+import { dimensionLayout, dimsSvg, materialPatternId } from './symbols2d';
 import type { Level } from './types';
 
 const level: Level = {
@@ -35,5 +35,11 @@ describe('2D dimensions', () => {
     const blank: Level = { id: 'lv1', name: '一层', elevation: 0, walls: [], rooms: [], openings: [], instances: [] };
     expect(dimensionLayout(blank)).toBeNull();
     expect(dimsSvg(blank)).toBe('');
+  });
+});
+
+describe('material SVG identifiers', () => {
+  it('keeps distinct material IDs distinct after encoding', () => {
+    expect(materialPatternId('vendor:oak')).not.toBe(materialPatternId('vendor_oak'));
   });
 });

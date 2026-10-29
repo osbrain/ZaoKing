@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { assetById, CATALOG, resolveAssetByQuery } from './assets';
 import { applyCmds } from './commands';
 import { buildBlankDocument } from './seed';
-import { instanceRef, type CustomAsset } from './types';
+import { instanceGeometry, instanceRef, type CustomAsset } from './types';
 import { SceneDocumentSchema } from './sceneSchema';
 import { instAABB } from './geometry';
 import { executeOps } from './ops';
@@ -88,6 +88,19 @@ describe('project component definitions', () => {
 });
 
 describe('declarative component rendering', () => {
+  it('merges instance geometry parameters without changing the shared asset definition', () => {
+    const definition: CustomAsset = {
+      ...asset,
+      geometry: { shape: 'bookcase', parameters: { compartments: 3, shelves: 5 } },
+    };
+    const override = { ...instance, parameters: { shelves: 7 } };
+
+    expect(instanceGeometry(override, definition)).toEqual({
+      shape: 'bookcase', parameters: { compartments: 3, shelves: 7 },
+    });
+    expect(definition.geometry.parameters?.shelves).toBe(5);
+  });
+
   it('offers searchable size and style variants without duplicate asset IDs', () => {
     expect(CATALOG.length).toBeGreaterThanOrEqual(80);
     expect(new Set(CATALOG.map((item) => item.id)).size).toBe(CATALOG.length);

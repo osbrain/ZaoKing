@@ -10,7 +10,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { assetById, materialById } from '@/core/assets';
-import { instanceRef, type Asset, type ComponentInstance, type Level, type Material, type Opening, type Room } from '@/core/types';
+import { instanceGeometry, instanceRef, type Asset, type ComponentInstance, type Level, type Material, type Opening, type Room } from '@/core/types';
 import { docBBox } from '@/core/geometry';
 import { buildWallSolids } from '@/core/wallGeometry';
 import { createModelFactory, disposeModelGeometry } from './modelFactory';
@@ -138,17 +138,18 @@ function Furniture({ inst, models, asset }: { inst: ComponentInstance; models: M
   const select = useEditorStore(s => s.select);
   const selected = useEditorStore(s => s.selection?.kind === 'furn' && s.selection.id === inst.id);
   const ref = instanceRef(inst, asset);
+  const geometry = useMemo(() => instanceGeometry(inst, asset), [asset?.geometry, inst.parameters]);
   const object = useMemo(() => {
     const model = models.buildFurniture({
       id: inst.id, type: ref.type, w: Math.max(10, ref.w), d: Math.max(10, ref.d), h: ref.h,
-      shape: asset?.geometry?.shape, finish: asset?.geometry?.finish,
-      parameters: { ...asset?.geometry?.parameters, ...inst.parameters },
+      shape: geometry?.shape, finish: geometry?.finish,
+      parameters: geometry?.parameters,
       color: ref.color, cx: 6000, cy: 5300, rot: 0,
     }) as THREE.Group;
     // Source models place themselves relative to the static prototype's origin.
     model.position.set(0, 0, 0);
     return model;
-  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, asset?.geometry, inst.parameters]);
+  }, [models, inst.id, ref.type, ref.w, ref.d, ref.h, ref.color, geometry]);
   useEffect(() => () => disposeModelGeometry(object), [object]);
   return (
     <group position={[inst.t.x / 1000, 0.015, -inst.t.y / 1000]} rotation={[0, inst.t.rot * Math.PI / 180, 0]}

@@ -38,4 +38,13 @@ describe('SceneDocumentSchema', () => {
     ];
     expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
   });
+
+  it('rejects non-hex component color overrides', () => {
+    const document = buildSeedDocument();
+    document.levels[0].instances[0].color = 'red';
+
+    const result = SceneDocumentSchema.safeParse(document);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'color')).toBe(true);
+  });
 });

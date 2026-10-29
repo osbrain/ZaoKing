@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyCmds } from './commands';
-import { createDesignPackage, DESIGN_PACKAGE_FORMAT, parseDesignPackage, serializeDesignPackage } from './designPackage';
+import { createDesignPackage, DESIGN_PACKAGE_FORMAT, MAX_DESIGN_PACKAGE_BYTES, parseDesignPackage, serializeDesignPackage } from './designPackage';
 import { buildBlankDocument, buildSeedDocument } from './seed';
 import { SceneDocumentSchema } from './sceneSchema';
 import { assetById, materialById } from './assets';
@@ -35,8 +35,13 @@ describe('portable design packages', () => {
       { type: 'place', inst: { id: 'placed-shelf', assetId: asset.id, t: { x: 1000, y: 1000, rot: 0 }, parameters: { shelves: 7 } } },
     ]);
 
-    const imported = parseDesignPackage(serializeDesignPackage(source)).document;
+    const exported = createDesignPackage(source);
+    const imported = parseDesignPackage(JSON.stringify(exported)).document;
+    const previousFormatPackage = { ...exported, assetManifest: [...exported.assetManifest, asset] };
+    const previousFormatImport = parseDesignPackage(JSON.stringify(previousFormatPackage)).document;
     expect(imported.assets).toEqual([asset]);
+    expect(exported.assetManifest.some((definition) => definition.id === asset.id)).toBe(false);
+    expect(previousFormatImport.assets).toEqual([asset]);
     expect(imported.levels[0].instances[0]).toMatchObject({ assetId: asset.id, parameters: { shelves: 7 } });
     expect(imported.assetSnapshots).toEqual([]);
   });
@@ -79,8 +84,21 @@ describe('portable design packages', () => {
 
   it('rejects malformed files and packages with missing asset definitions', () => {
     expect(() => parseDesignPackage('{bad')).toThrow('有效的 JSON');
+    expect(() => parseDesignPackage(' '.repeat(MAX_DESIGN_PACKAGE_BYTES + 1))).toThrow('不能超过 15 MB');
     const exported = createDesignPackage(buildSeedDocument());
     exported.assetManifest = [];
     expect(() => parseDesignPackage(JSON.stringify(exported))).toThrow('缺少组件定义');
+  });
+
+  it('rejects conflicting duplicate custom component definitions', () => {
+    const source = buildBlankDocument('冲突组件');
+    const customAsset = {
+      id: 'custom:conflict-shelf', type: 'custom' as const, name: '书架', category: '书房',
+      w: 900, d: 300, h: 1800, color: '#9b7653', tags: ['书架'], geometry: { shape: 'bookcase' as const },
+    };
+    const exported = createDesignPackage({ ...source, assets: [customAsset] });
+    exported.assetManifest.push({ ...customAsset, name: '不同定义' });
+
+    expect(() => parseDesignPackage(JSON.stringify(exported))).toThrow('组件定义冲突');
   });
 });

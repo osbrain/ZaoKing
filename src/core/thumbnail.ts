@@ -7,7 +7,7 @@
 import { assetById, materialCatalog } from './assets';
 import { docBBox } from './geometry';
 import { furnSVG, materialPatternId, openingsSvg, patternsDefs } from './symbols2d';
-import { instanceRef, type SceneDocument } from './types';
+import { instanceGeometry, instanceRef, type SceneDocument } from './types';
 import { documentAssets, documentMaterials } from './sceneResources';
 
 const WALL_FILL: Record<string, string> = {
@@ -41,7 +41,7 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
     .map((inst) => {
       const ref = instanceRef(inst, assetById(inst.assetId, assets));
       const asset = assetById(inst.assetId, assets);
-      return `<g transform="translate(${inst.t.x} ${inst.t.y}) rotate(${inst.t.rot})">${furnSVG(ref.type, ref.w, ref.d, ref.color, asset?.geometry)}</g>`;
+      return `<g transform="translate(${inst.t.x} ${inst.t.y}) rotate(${inst.t.rot})">${furnSVG(ref.type, ref.w, ref.d, ref.color, instanceGeometry(inst, asset))}</g>`;
     })
     .join('');
 
