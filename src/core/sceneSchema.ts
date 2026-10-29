@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { isSimplePolygon } from './geometry';
-import { CustomAssetSchema } from './assetSchema';
-import { assetById } from './assets';
+import { AssetDefinitionSchema, CustomAssetSchema } from './assetSchema';
+import { assetCatalog, materialCatalog } from './assets';
+import { MaterialSchema } from './materialSchema';
 
 const MAX_COORDINATE_MM = 1_000_000;
 const coordinate = z.number().finite().min(-MAX_COORDINATE_MM).max(MAX_COORDINATE_MM);
@@ -105,13 +106,31 @@ export const SceneDocumentSchema = z.object({
   meta: z.object({ name: z.string().trim().min(1).max(200), units: z.literal('mm') }).strict(),
   levels: z.array(levelSchema).min(1).max(100),
   assets: z.array(CustomAssetSchema).max(1000).optional(),
+  assetSnapshots: z.array(AssetDefinitionSchema).max(1000).optional(),
+  materialSnapshots: z.array(MaterialSchema).max(1000).optional(),
 }).strict().superRefine((document, ctx) => {
+  const knownAssetIds = new Set(assetCatalog([
+    ...(document.assetSnapshots ?? []), ...(document.assets ?? []),
+  ]).map((asset) => asset.id));
+  const knownMaterialIds = new Set(materialCatalog(document.materialSnapshots).map((material) => material.id));
   const assetIds = new Set<string>();
-  document.assets?.forEach((asset, index) => {
-    if (assetIds.has(asset.id)) {
-      ctx.addIssue({ path: ['assets', index, 'id'], code: z.ZodIssueCode.custom, message: 'Asset IDs must be unique' });
+  for (const collection of ['assets', 'assetSnapshots'] as const) {
+    document[collection]?.forEach((asset, index) => {
+      if (assetIds.has(asset.id)) {
+        ctx.addIssue({ path: [collection, index, 'id'], code: z.ZodIssueCode.custom, message: 'Asset IDs must be unique' });
+      }
+      assetIds.add(asset.id);
+      if (collection === 'assetSnapshots' && asset.id.startsWith('custom:')) {
+        ctx.addIssue({ path: [collection, index, 'id'], code: z.ZodIssueCode.custom, message: 'Custom assets must be stored in assets' });
+      }
+    });
+  }
+  const materialIds = new Set<string>();
+  document.materialSnapshots?.forEach((material, index) => {
+    if (materialIds.has(material.id)) {
+      ctx.addIssue({ path: ['materialSnapshots', index, 'id'], code: z.ZodIssueCode.custom, message: 'Material IDs must be unique' });
     }
-    assetIds.add(asset.id);
+    materialIds.add(material.id);
   });
   const ids = new Set<string>();
   document.levels.forEach((level, index) => {
@@ -120,8 +139,13 @@ export const SceneDocumentSchema = z.object({
     }
     ids.add(level.id);
     level.instances.forEach((instance, instanceIndex) => {
-      if (!assetById(instance.assetId, document.assets)) {
+      if (!knownAssetIds.has(instance.assetId)) {
         ctx.addIssue({ path: ['levels', index, 'instances', instanceIndex, 'assetId'], code: z.ZodIssueCode.custom, message: 'Component asset does not exist in this document or the built-in catalog' });
+      }
+    });
+    level.rooms.forEach((room, roomIndex) => {
+      if (!knownMaterialIds.has(room.floorMaterialId)) {
+        ctx.addIssue({ path: ['levels', index, 'rooms', roomIndex, 'floorMaterialId'], code: z.ZodIssueCode.custom, message: 'Floor material does not exist in this document or the built-in catalog' });
       }
     });
   });

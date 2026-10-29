@@ -34,10 +34,24 @@ const TEX = {
   terrazzo:{sx:.5, sy:.5, base:'#c9bca9', rough:.47}, carpet:{sx:.3, sy:.3, base:'#958ca7', rough:1},
 };
 const floorMats = {};
-function floorMat(kind){
-  if (floorMats[kind]) return floorMats[kind];
-  const s = TEX[kind] || TEX.tile800, R = rng(kind.length*977 + 13), cv = document.createElement('canvas');
-  const wood = kind === 'wood' || kind === 'walnut';
+function floorMat(kind, definition = {}){
+  const key = kind + ':' + JSON.stringify(definition);
+  if (floorMats[key]) return floorMats[key];
+  const defaults = TEX[kind] || TEX.tile800;
+  const render = definition.render || {};
+  const [tileW, tileH] = render.tileMm || [defaults.sx * 1000, defaults.sy * 1000];
+  const s = {
+    ...defaults,
+    sx: tileW / 1000,
+    sy: tileH / 1000,
+    base: definition.sw || defaults.base,
+    rough: render.roughness ?? defaults.rough,
+    grout: render.groutColor || defaults.grout,
+  };
+  const pattern = render.pattern || (kind === 'wood' || kind === 'walnut' ? 'wood' : kind === 'marble' || kind === 'terrazzo' || kind === 'carpet' ? kind : 'tile');
+  if (pattern === 'plain') return floorMats[key] = new THREE.MeshStandardMaterial({ color: s.base, roughness: s.rough });
+  const R = rng(key.length*977 + 13), cv = document.createElement('canvas');
+  const wood = pattern === 'wood';
   cv.width = wood ? 1024 : 512; cv.height = wood ? 205 : 512;
   const g = cv.getContext('2d'), W = cv.width, Hh = cv.height;
   g.fillStyle = s.base; g.fillRect(0, 0, W, Hh);
@@ -54,20 +68,20 @@ function floorMat(kind){
       });
       g.fillStyle = rgbK(s.base, .62); g.fillRect(0, r*rowH, W, 2.5);
     }
-  } else if (kind === 'marble'){
+  } else if (pattern === 'marble'){
     g.strokeStyle = 'rgba(160,150,135,.35)';
     for (let k = 0; k < 6; k++){ g.lineWidth = 1 + R()*3; g.beginPath(); g.moveTo(R()*W, 0); g.bezierCurveTo(R()*W, R()*Hh, R()*W, R()*Hh, R()*W, Hh); g.stroke(); }
-  } else if (kind === 'terrazzo'){
+  } else if (pattern === 'terrazzo'){
     const cs = ['#b9a58c','#8fa3a0','#c9b7a2','#a88f76','#7e8a86'];
     for (let k = 0; k < 160; k++){ g.fillStyle = cs[k%5]; g.beginPath(); g.arc(R()*W, R()*Hh, 2 + R()*7, 0, 7); g.fill(); }
-  } else {
+  } else if (pattern !== 'plain') {
     for (let k = 0; k < 1500; k++){ g.fillStyle = `rgba(0,0,0,${R()*.04})`; g.fillRect(R()*W, R()*Hh, 2, 2); }
   }
   if (s.grout){ g.fillStyle = s.grout; g.fillRect(0, 0, W, 3); g.fillRect(0, 0, 3, Hh); }
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1/s.sx, 1/s.sy);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anisotropy;
-  return floorMats[kind] = new THREE.MeshStandardMaterial({map:t, roughness:s.rough});
+  return floorMats[key] = new THREE.MeshStandardMaterial({map:t, roughness:s.rough});
 }
 
 /* ======================= 几何小工具（y = 底面高度） ======================= */

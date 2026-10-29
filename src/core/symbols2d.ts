@@ -5,7 +5,8 @@
  * 生产环境中资产将携带 plan2d 矢量符号或俯视投影图，此处为官方内置符号。
  * ============================================================ */
 
-import type { Asset, Level } from './types';
+import type { Asset, Level, Material } from './types';
+import { MATERIALS } from './assets';
 import { docBBox } from './geometry';
 
 /* ---------- 基础工具 ---------- */
@@ -35,33 +36,27 @@ const pa = (d: string, f = 'none', ex = '') => `<path d="${d}" fill="${f}" ${ST}
 
 /* ---------- 地面材质 patterns（prefix 用于同页多 SVG 时避免 ID 冲突） ---------- */
 
-export function patternsDefs(prefix = ''): string {
-  const plank = (id: string, base: string, line: string) =>
-    `<pattern id="${prefix}m-${id}" patternUnits="userSpaceOnUse" width="1800" height="360">
-      <rect width="1800" height="360" fill="${base}"/>
-      <path d="M0 0H1800M0 180H1800M1200 0V180M600 180V360" stroke="${line}" stroke-width="10"/>
-      <path d="M100 70Q500 60 900 85T1700 75M200 260Q700 250 1100 275T1750 262" stroke="${line}" stroke-width="5" fill="none" opacity=".45"/></pattern>`;
-  const tile = (id: string, size: number, base: string, line: string) =>
-    `<pattern id="${prefix}m-${id}" patternUnits="userSpaceOnUse" width="${size}" height="${size}">
-      <rect width="${size}" height="${size}" fill="${base}"/><path d="M0 0H${size}M0 0V${size}" stroke="${line}" stroke-width="10"/></pattern>`;
-  return (
-    plank('wood', '#dcc09a', '#bf9d70') +
-    plank('walnut', '#a57c56', '#80593a') +
-    tile('tile800', 800, '#ece7de', '#d3cabb') +
-    tile('tile600', 600, '#e2e6e3', '#c4cbc6') +
-    tile('antislip', 300, '#d6dbd7', '#b3bab4') +
-    `<pattern id="${prefix}m-marble" patternUnits="userSpaceOnUse" width="1200" height="1200">
-      <rect width="1200" height="1200" fill="#f3f0ea"/><path d="M0 0H1200M0 0V1200" stroke="#dcd5c8" stroke-width="10"/>
-      <path d="M-50 300C250 260 380 520 700 470S1100 640 1260 600M200 1200C300 950 520 980 640 820" stroke="#d6cfc2" stroke-width="12" fill="none"/></pattern>
-    <pattern id="${prefix}m-terrazzo" patternUnits="userSpaceOnUse" width="500" height="500">
-      <rect width="500" height="500" fill="#e8e1d5"/>
-      <circle cx="60" cy="80" r="22" fill="#b9a58c"/><circle cx="310" cy="140" r="16" fill="#8fa3a0"/><circle cx="190" cy="330" r="26" fill="#c9b7a2"/>
-      <circle cx="420" cy="400" r="18" fill="#a88f76"/><circle cx="90" cy="440" r="12" fill="#8fa3a0"/><circle cx="440" cy="40" r="10" fill="#b9a58c"/></pattern>
-    <pattern id="${prefix}m-carpet" patternUnits="userSpaceOnUse" width="120" height="120">
-      <rect width="120" height="120" fill="#c9c3d3"/><circle cx="30" cy="30" r="8" fill="#bab3c6"/><circle cx="90" cy="90" r="8" fill="#bab3c6"/></pattern>
-    <pattern id="${prefix}p-grid" patternUnits="userSpaceOnUse" width="1000" height="1000">
-      <path d="M500 0V1000M0 500H1000" stroke="#e5dfd3" stroke-width="8"/><path d="M0 0V1000M0 0H1000" stroke="#d8d0c1" stroke-width="14"/></pattern>`
-  );
+export const materialPatternId = (id: string, prefix = '') =>
+  `${prefix}m-${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+export function patternsDefs(prefix = '', materials: readonly Material[] = MATERIALS): string {
+  const patterns = materials.map((material) => {
+    const render = material.render;
+    const pattern = render?.pattern ?? (material.id === 'wood' || material.id === 'walnut' ? 'wood' : 'tile');
+    const width = render?.tileMm?.[0] ?? 800;
+    const height = render?.tileMm?.[1] ?? width;
+    const base = material.sw;
+    const grout = render?.groutColor ?? '#c5beb3';
+    const id = materialPatternId(material.id, prefix);
+    const start = `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="${base}"/>`;
+    if (pattern === 'wood') return `${start}<path d="M0 0H${width}M0 ${height / 2}H${width}M${width * 0.66} 0V${height / 2}M${width * 0.33} ${height / 2}V${height}" stroke="${grout}" stroke-width="10"/><path d="M0 ${height * .24}Q${width * .25} ${height * .18} ${width * .5} ${height * .26}T${width} ${height * .23}M0 ${height * .75}Q${width * .25} ${height * .68} ${width * .5} ${height * .76}T${width} ${height * .73}" stroke="${grout}" stroke-width="5" fill="none" opacity=".55"/></pattern>`;
+    if (pattern === 'marble') return `${start}<path d="M0 0H${width}M0 0V${height}" stroke="${grout}" stroke-width="10"/><path d="M0 ${height * .35}C${width * .25} ${height * .3} ${width * .25} ${height * .65} ${width * .55} ${height * .5}S${width * .8} ${height * .65} ${width} ${height * .52}" stroke="${grout}" stroke-width="14" fill="none"/></pattern>`;
+    if (pattern === 'terrazzo') return `${start}<circle cx="${width * .16}" cy="${height * .2}" r="${Math.max(8, width * .045)}" fill="${grout}"/><circle cx="${width * .62}" cy="${height * .28}" r="${Math.max(6, width * .032)}" fill="#8fa3a0"/><circle cx="${width * .38}" cy="${height * .68}" r="${Math.max(9, width * .052)}" fill="#c9b7a2"/><circle cx="${width * .84}" cy="${height * .8}" r="${Math.max(7, width * .036)}" fill="#a88f76"/></pattern>`;
+    if (pattern === 'carpet') return `${start}<circle cx="${width * .25}" cy="${height * .25}" r="${Math.max(4, width * .06)}" fill="${grout}" opacity=".65"/><circle cx="${width * .75}" cy="${height * .75}" r="${Math.max(4, width * .06)}" fill="${grout}" opacity=".65"/></pattern>`;
+    if (pattern === 'plain') return `${start}</pattern>`;
+    return `${start}<path d="M0 0H${width}M0 0V${height}" stroke="${grout}" stroke-width="10"/></pattern>`;
+  }).join('');
+  return `${patterns}<pattern id="${prefix}p-grid" patternUnits="userSpaceOnUse" width="1000" height="1000"><path d="M500 0V1000M0 500H1000" stroke="#e5dfd3" stroke-width="8"/><path d="M0 0V1000M0 0H1000" stroke="#d8d0c1" stroke-width="14"/></pattern>`;
 }
 
 /* ---------- 家具平面图例（原型 furnSVG 全量移植） ---------- */

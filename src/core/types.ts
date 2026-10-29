@@ -83,6 +83,10 @@ export interface SceneDocument {
   levels: Level[];
   /** 项目内组件定义，与方案一起保存；旧文档无需迁移。 */
   assets?: CustomAsset[];
+  /** 导入包内预置组件的定义快照，防止目录升级后资产 ID 指向新定义。 */
+  assetSnapshots?: Asset[];
+  /** 地面材质快照，用于跨目录版本保留外观和铺装参数。 */
+  materialSnapshots?: Material[];
 }
 
 /* ---------- 资产目录（Asset）与材质（Material） ---------- */
@@ -130,6 +134,12 @@ export interface Material {
   price: number;
   /** 2D 填充底色 */
   sw: string;
+  render?: {
+    pattern: 'wood' | 'tile' | 'marble' | 'terrazzo' | 'carpet' | 'plain';
+    tileMm?: [number, number];
+    roughness?: number;
+    groutColor?: string;
+  };
 }
 
 /* ---------- 派生工具 ---------- */

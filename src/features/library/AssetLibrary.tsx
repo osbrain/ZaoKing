@@ -10,6 +10,7 @@ import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { furnSVG } from '@/core/symbols2d';
 import AssetEditor from './AssetEditor';
+import { documentAssets } from '@/core/sceneResources';
 
 export default function AssetLibrary() {
   const [q, setQ] = useState('');
@@ -18,16 +19,17 @@ export default function AssetLibrary() {
   const [editor, setEditor] = useState<{ asset?: CustomAsset } | null>(null);
   const doc = useSceneStore(s => s.doc);
   const run = useSceneStore(s => s.run);
-  const assets = doc?.assets;
+  const assets = useMemo(() => doc ? documentAssets(doc) : undefined, [doc?.assets, doc?.assetSnapshots]);
   const catalog = useMemo(() => assetCatalog(assets), [assets]);
+  const projectAssetIds = useMemo(() => new Set(assets?.map(asset => asset.id) ?? []), [assets]);
   const categories = useMemo(() => [...new Set(catalog.map(asset => asset.category))], [catalog]);
   const groups = useMemo(() => {
     const query = q.trim().toLowerCase().replace(/\s+/g, '');
     return categories.filter(cat => category === 'all' || cat === category).map(cat => ({
-      cat, items: catalog.filter(asset => asset.category === cat && (source === 'all' || asset.type === 'custom') &&
+      cat, items: catalog.filter(asset => asset.category === cat && (source === 'all' || projectAssetIds.has(asset.id)) &&
         (!query || [asset.name, asset.type, ...asset.tags].some(text => text.toLowerCase().replace(/\s+/g, '').includes(query)))),
     })).filter(group => group.items.length > 0);
-  }, [q, category, source, catalog, categories]);
+  }, [q, category, source, catalog, categories, projectAssetIds]);
   const usage = useMemo(() => {
     const counts = new Map<string, number>();
     for (const level of doc?.levels ?? []) for (const inst of level.instances) counts.set(inst.assetId, (counts.get(inst.assetId) ?? 0) + 1);
@@ -37,12 +39,13 @@ export default function AssetLibrary() {
   const addAsset = (asset: Asset) => {
     const document = useSceneStore.getState().doc;
     if (!document) return;
+    const projectAssets = documentAssets(document);
     const level = document.levels[0];
     const ed = useEditorStore.getState();
     const selection = ed.selection;
     const room = selection?.kind === 'room' ? level.rooms.find(candidate => candidate.id === selection.id) : resolveRoom(level);
     if (!room) { ed.showToast('请先使用「房间」工具绘制可放置的地面'); return; }
-    const placement = solvePlacement(level, room, asset, { assets: document.assets });
+    const placement = solvePlacement(level, room, asset, { assets: projectAssets });
     if (!placement) { ed.showToast(`「${room.name}」里没有足够的空位`); return; }
     const id = uid();
     run('添加组件', [{ levelId: level.id, type: 'place', inst: { id, assetId: asset.id, t: placement } }]);
@@ -66,7 +69,7 @@ export default function AssetLibrary() {
         </div>
         <input aria-label="搜索组件" value={q} onChange={event => setQ(event.target.value)} placeholder="搜索名称、类型、标签…" className="w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm outline-none focus:border-accent" />
         <div className="flex gap-1">
-          {([['all', '全部组件'], ['project', '本方案自定义']] as const).map(([value, label]) => (
+          {([['all', '全部组件'], ['project', '本方案组件']] as const).map(([value, label]) => (
             <button key={value} aria-pressed={source === value} onClick={() => setSource(value)} className={`flex-1 rounded-md px-1 py-1.5 text-[11px] ${source === value ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-50'}`}>{label}</button>
           ))}
         </div>
@@ -84,7 +87,7 @@ export default function AssetLibrary() {
           <h4 className="sticky top-0 z-10 bg-white py-2 text-[11px] font-semibold tracking-widest text-zinc-400">{group.cat} · {group.items.length}</h4>
           <div className="grid grid-cols-2 gap-1.5">
             {group.items.map(asset => {
-              const custom = assets?.find(candidate => candidate.id === asset.id);
+              const custom = doc?.assets?.find(candidate => candidate.id === asset.id);
               const used = usage.get(asset.id) ?? 0;
               return <div key={asset.id} className="overflow-hidden rounded-lg border border-zinc-200 bg-white transition hover:border-accent hover:shadow-sm">
                 <button onClick={() => addAsset(asset)} className="flex w-full flex-col items-center p-2 text-center" title={`放置 ${asset.name} · ${asset.w}×${asset.d}×${asset.h} mm`}>

@@ -6,14 +6,15 @@
  *  - 户型编辑工具：画墙（轴锁+吸附）、画房间地面、在墙上开门/开窗
  * 拖拽/绘制为瞬态本地 state，pointerup 才提交命令进撤销栈。 */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore, type Selection, type Tool, type WallPreset } from '@/stores/editorStore';
 import type { Cmd } from '@/core/commands';
-import { assetById, materialById } from '@/core/assets';
-import { instanceRef, uid, type Asset, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
+import { assetById, materialById, materialCatalog } from '@/core/assets';
+import { instanceRef, uid, type Asset, type ComponentInstance, type Level, type Material, type Opening, type Vec2, type Wall } from '@/core/types';
 import { docBBox, polyArea } from '@/core/geometry';
-import { dimensionLayout, dimsSvg, furnSVG, openingsSvg, patternsDefs } from '@/core/symbols2d';
+import { dimensionLayout, dimsSvg, furnSVG, materialPatternId, openingsSvg, patternsDefs } from '@/core/symbols2d';
+import { documentAssets, documentMaterials } from '@/core/sceneResources';
 
 const NOLABEL = ['plant', 'floorlamp', 'sidetable', 'barstool', 'beanbag', 'rug'];
 const GRID = 100; // 绘制吸附网格 mm
@@ -122,6 +123,8 @@ interface WallEdit { id: string; dx?: number; dy?: number; rect?: Rect }
 
 export default function PlanView() {
   const doc = useSceneStore((s) => s.previewDoc ?? s.doc);
+  const assets = useMemo(() => doc ? documentAssets(doc) : undefined, [doc?.assets, doc?.assetSnapshots]);
+  const materials = useMemo(() => doc ? materialCatalog(documentMaterials(doc)) : undefined, [doc?.materialSnapshots]);
   const run = useSceneStore((s) => s.run);
   const camera = useEditorStore((s) => s.camera);
   const setCamera = useEditorStore((s) => s.setCamera);
@@ -475,13 +478,13 @@ export default function PlanView() {
         onPointerMove={onSvgMove}
         onPointerLeave={onSvgLeave}
       >
-        <defs dangerouslySetInnerHTML={{ __html: patternsDefs() }} />
+        <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) }} />
         <RoomsLayer level={level} selection={selection} onSelect={select} interactive={selecting} />
         <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting} />
         <g dangerouslySetInnerHTML={{ __html: openingsSvg(level) }} pointerEvents="none" />
         <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting} />
-        <FurnLayer assets={doc?.assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />
-        <LabelsLayer level={level} />
+        <FurnLayer assets={assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />
+        <LabelsLayer level={level} materials={materials} />
         <g dangerouslySetInnerHTML={{ __html: dimsSvg(level) }} pointerEvents="none" />
         {/* 绘制预览 */}
         {wallDraft && Math.hypot(wallDraft.b[0] - wallDraft.a[0], wallDraft.b[1] - wallDraft.a[1]) > 10 && (() => {
@@ -513,7 +516,7 @@ export default function PlanView() {
             fill="rgba(79,115,148,.4)" stroke="#4f7394" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" pointerEvents="none"
           />
         )}
-        <SelLayer assets={doc?.assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
+        <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
       </svg>
 
       {/* 工具条 */}
@@ -598,7 +601,7 @@ const RoomsLayer = React.memo(function RoomsLayer({
         <polygon
           key={r.id}
           points={r.poly.map((p) => p.join(',')).join(' ')}
-          fill={`url(#m-${r.floorMaterialId})`}
+          fill={`url(#${materialPatternId(r.floorMaterialId)})`}
           className={interactive ? 'cursor-pointer' : ''}
           fillOpacity={selection?.kind === 'room' && selection.id === r.id ? 0.75 : 1}
           onPointerDown={interactive ? (e) => { e.stopPropagation(); onSelect({ kind: 'room', id: r.id }); } : undefined}
@@ -738,7 +741,7 @@ const FurnLayer = React.memo(function FurnLayer({
   );
 });
 
-const LabelsLayer = React.memo(function LabelsLayer({ level }: { level: Level }) {
+const LabelsLayer = React.memo(function LabelsLayer({ level, materials }: { level: Level; materials?: readonly Material[] }) {
   const halo = { stroke: '#fbf9f4', strokeWidth: 45, paintOrder: 'stroke' as const };
   return (
     <g pointerEvents="none">
@@ -750,7 +753,7 @@ const LabelsLayer = React.memo(function LabelsLayer({ level }: { level: Level })
               {r.name}
             </text>
             <text x={r.labelAt![0]} y={r.labelAt![1] + 260} fontSize={175} textAnchor="middle" fill="#7d7366" {...halo}>
-              {polyArea(r.poly).toFixed(2)} m² · {materialById(r.floorMaterialId).name}
+              {polyArea(r.poly).toFixed(2)} m² · {materialById(r.floorMaterialId, materials).name}
             </text>
           </g>
         ))}

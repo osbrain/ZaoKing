@@ -9,11 +9,12 @@ import { Html, OrbitControls } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
-import { assetById } from '@/core/assets';
-import { instanceRef, type Asset, type ComponentInstance, type Level, type Opening, type Room } from '@/core/types';
+import { assetById, materialById } from '@/core/assets';
+import { instanceRef, type Asset, type ComponentInstance, type Level, type Material, type Opening, type Room } from '@/core/types';
 import { docBBox } from '@/core/geometry';
 import { buildWallSolids } from '@/core/wallGeometry';
 import { createModelFactory, disposeModelGeometry } from './modelFactory';
+import { documentAssets, documentMaterials } from '@/core/sceneResources';
 
 type ModelFactory = ReturnType<typeof createModelFactory>;
 
@@ -99,7 +100,7 @@ function Architecture({ level, cutHeight }: { level: Level; cutHeight: number })
   );
 }
 
-function RoomFloor({ room, models, cutHeight }: { room: Room; models: ModelFactory; cutHeight: number }) {
+function RoomFloor({ room, models, cutHeight, materials }: { room: Room; models: ModelFactory; cutHeight: number; materials: readonly Material[] }) {
   const select = useEditorStore(s => s.select);
   const selected = useEditorStore(s => s.selection?.kind === 'room' && s.selection.id === room.id);
   const geometry = useMemo(() => {
@@ -109,7 +110,8 @@ function RoomFloor({ room, models, cutHeight }: { room: Room; models: ModelFacto
     return result;
   }, [room.poly]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const material = models.floorMat(room.floorMaterialId) as THREE.MeshStandardMaterial;
+  const definition = materialById(room.floorMaterialId, materials);
+  const material = models.floorMat(room.floorMaterialId, definition) as THREE.MeshStandardMaterial;
   const bay = room.counted === false;
   const ceiling = useMemo(() => {
     const shape = new THREE.Shape([...room.poly].reverse().map(([x, y]) => new THREE.Vector2(x / 1000, -y / 1000)));
@@ -246,7 +248,7 @@ function Lighting({ level, hour }: { level: Level; hour: number }) {
   </>;
 }
 
-function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Level; assets?: readonly Asset[]; cutHeight: number; labels: boolean; hour: number }) {
+function DetailedScene({ level, assets, materials, cutHeight, labels, hour }: { level: Level; assets?: readonly Asset[]; materials: readonly Material[]; cutHeight: number; labels: boolean; hour: number }) {
   const { gl, scene } = useThree();
   const [models, setModels] = useState<ModelFactory | null>(null);
   useEffect(() => {
@@ -269,7 +271,7 @@ function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Leve
       <meshStandardMaterial color="#e4e0d7" roughness={1} />
     </mesh>
     {models && <>
-      {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} />)}
+      {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} materials={materials} />)}
       {level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} asset={assetById(inst.assetId, assets)} />)}
     </>}
     <Architecture level={level} cutHeight={cutHeight} />
@@ -281,6 +283,8 @@ function DetailedScene({ level, assets, cutHeight, labels, hour }: { level: Leve
 
 export default function Scene3D() {
   const doc = useSceneStore(s => s.previewDoc ?? s.doc);
+  const assets = useMemo(() => doc ? documentAssets(doc) : [], [doc?.assets, doc?.assetSnapshots]);
+  const materials = useMemo(() => doc ? documentMaterials(doc) : [], [doc?.materialSnapshots]);
   const select = useEditorStore(s => s.select);
   const setPreset3d = useEditorStore(s => s.setPreset3d);
   const [cutHeight, setCutHeight] = useState(2800);
@@ -295,7 +299,7 @@ export default function Scene3D() {
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
-        <DetailedScene assets={doc?.assets} level={level} cutHeight={cutHeight} labels={labels} hour={hour} />
+        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels} hour={hour} />
       </Canvas>
       <div className="absolute right-3 top-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-1 rounded-xl border border-stone-200 bg-white/95 p-1 shadow-sm backdrop-blur-sm">
         <button className={button} onClick={() => setPreset3d('iso')}>鸟瞰</button>

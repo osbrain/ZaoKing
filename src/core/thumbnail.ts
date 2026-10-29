@@ -4,10 +4,11 @@
  * 供项目卡片展示；空户型返回空串（由前端展示占位）。
  * ============================================================ */
 
-import { assetById } from './assets';
+import { assetById, materialCatalog } from './assets';
 import { docBBox } from './geometry';
-import { furnSVG, openingsSvg, patternsDefs } from './symbols2d';
+import { furnSVG, materialPatternId, openingsSvg, patternsDefs } from './symbols2d';
 import { instanceRef, type SceneDocument } from './types';
+import { documentAssets, documentMaterials } from './sceneResources';
 
 const WALL_FILL: Record<string, string> = {
   bearing: '#26241f',
@@ -26,25 +27,27 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
   const y = bb.y0 - pad;
   const w = bb.x1 - bb.x0 + pad * 2;
   const h = bb.y1 - bb.y0 + pad * 2;
+  const assets = documentAssets(doc);
+  const materials = materialCatalog(documentMaterials(doc));
 
   const rooms = lv.rooms
-    .map((r) => `<polygon points="${r.poly.map((p) => p.join(',')).join(' ')}" fill="url(#${prefix}m-${r.floorMaterialId})"/>`)
+    .map((r) => `<polygon points="${r.poly.map((p) => p.join(',')).join(' ')}" fill="url(#${materialPatternId(r.floorMaterialId, prefix)})"/>`)
     .join('');
   const walls = lv.walls
     .map((wl) => `<rect x="${wl.x0}" y="${wl.y0}" width="${wl.x1 - wl.x0}" height="${wl.y1 - wl.y0}" fill="${wl.color ?? WALL_FILL[wl.kind] ?? '#a7a195'}"/>`)
     .join('');
-  const assets = doc.assets ?? [];
   const furn = lv.instances
     .slice(0, 500)
     .map((inst) => {
       const ref = instanceRef(inst, assetById(inst.assetId, assets));
-      return `<g transform="translate(${inst.t.x} ${inst.t.y}) rotate(${inst.t.rot})">${furnSVG(ref.type, ref.w, ref.d, ref.color)}</g>`;
+      const asset = assetById(inst.assetId, assets);
+      return `<g transform="translate(${inst.t.x} ${inst.t.y}) rotate(${inst.t.rot})">${furnSVG(ref.type, ref.w, ref.d, ref.color, asset?.geometry)}</g>`;
     })
     .join('');
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="xMidYMid meet">` +
-    `<defs>${patternsDefs(prefix)}</defs>` +
+    `<defs>${patternsDefs(prefix, materials)}</defs>` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f7f4ee"/>` +
     rooms +
     openingsSvg(lv) +

@@ -8,18 +8,24 @@
 import type { Asset, Material } from './types';
 
 export const MATERIALS: Material[] = [
-  { id: 'wood', name: '橡木地板', price: 320, sw: '#b38a5b' },
-  { id: 'walnut', name: '胡桃木地板', price: 380, sw: '#744b2f' },
-  { id: 'tile800', name: '800 地砖', price: 220, sw: '#cbc3b7' },
-  { id: 'tile600', name: '600 地砖', price: 160, sw: '#bdc5c1' },
-  { id: 'marble', name: '大理石', price: 650, sw: '#d9d5cd' },
-  { id: 'antislip', name: '300 防滑砖', price: 140, sw: '#afb8b3' },
-  { id: 'terrazzo', name: '水磨石', price: 280, sw: '#c9bca9' },
-  { id: 'carpet', name: '满铺地毯', price: 200, sw: '#958ca7' },
+  { id: 'wood', name: '橡木地板', price: 320, sw: '#b38a5b', render: { pattern: 'wood', tileMm: [1800, 360], roughness: 0.6 } },
+  { id: 'walnut', name: '胡桃木地板', price: 380, sw: '#744b2f', render: { pattern: 'wood', tileMm: [1800, 360], roughness: 0.55 } },
+  { id: 'tile800', name: '800 地砖', price: 220, sw: '#cbc3b7', render: { pattern: 'tile', tileMm: [800, 800], roughness: 0.36, groutColor: '#a99f91' } },
+  { id: 'tile600', name: '600 地砖', price: 160, sw: '#bdc5c1', render: { pattern: 'tile', tileMm: [600, 600], roughness: 0.42, groutColor: '#969f99' } },
+  { id: 'marble', name: '大理石', price: 650, sw: '#d9d5cd', render: { pattern: 'marble', tileMm: [1200, 1200], roughness: 0.24, groutColor: '#bcb4a7' } },
+  { id: 'antislip', name: '300 防滑砖', price: 140, sw: '#afb8b3', render: { pattern: 'tile', tileMm: [300, 300], roughness: 0.84, groutColor: '#858f88' } },
+  { id: 'terrazzo', name: '水磨石', price: 280, sw: '#c9bca9', render: { pattern: 'terrazzo', tileMm: [500, 500], roughness: 0.47 } },
+  { id: 'carpet', name: '满铺地毯', price: 200, sw: '#958ca7', render: { pattern: 'carpet', tileMm: [300, 300], roughness: 1 } },
 ];
 
-export const materialById = (id: string): Material =>
-  MATERIALS.find((m) => m.id === id) ?? MATERIALS[0];
+export const materialById = (id: string, projectMaterials: readonly Material[] = []): Material =>
+  projectMaterials.find((material) => material.id === id) ?? MATERIALS.find((material) => material.id === id) ?? MATERIALS[0];
+
+export const materialCatalog = (projectMaterials: readonly Material[] = []): Material[] => {
+  const materials = new Map(MATERIALS.map((material) => [material.id, material]));
+  for (const material of projectMaterials) materials.set(material.id, material);
+  return [...materials.values()];
+};
 
 /** 3D 占位体高度（mm），按原型类型 */
 export const TYPE_H: Record<string, number> = {
@@ -123,10 +129,13 @@ export const CATALOG: Asset[] = buildCatalog();
 const BUILTIN_ASSETS = new Map(CATALOG.map((asset) => [asset.id, asset]));
 
 export const assetById = (id: string, projectAssets: readonly Asset[] = []): Asset | undefined =>
-  BUILTIN_ASSETS.get(id) ?? projectAssets.find((asset) => asset.id === id);
+  projectAssets.find((asset) => asset.id === id) ?? BUILTIN_ASSETS.get(id);
 
-export const assetCatalog = (projectAssets: readonly Asset[] = []): Asset[] =>
-  [...CATALOG, ...projectAssets];
+export const assetCatalog = (projectAssets: readonly Asset[] = []): Asset[] => {
+  const assets = new Map(CATALOG.map((asset) => [asset.id, asset]));
+  for (const asset of projectAssets) assets.set(asset.id, asset);
+  return [...assets.values()];
+};
 
 export const CATEGORIES = RAW_LIB.map((g) => g.cat);
 
@@ -197,13 +206,14 @@ const COLOR_HINTS: Array<[RegExp, string[]]> = [
   [/水磨石/, ['terrazzo']],
 ];
 
-export function resolveMaterialByQuery(query: string): Material | null {
+export function resolveMaterialByQuery(query: string, projectMaterials: readonly Material[] = []): Material | null {
   const q = query.trim();
-  const byName = MATERIALS.find((m) => m.name.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')));
+  const catalog = materialCatalog(projectMaterials);
+  const byName = catalog.find((m) => m.name.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')));
   if (byName) return byName;
   for (const [re, ids] of COLOR_HINTS) {
     if (re.test(q)) {
-      const hit = MATERIALS.find((m) => ids.includes(m.id));
+      const hit = catalog.find((m) => ids.includes(m.id));
       if (hit) return hit;
     }
   }

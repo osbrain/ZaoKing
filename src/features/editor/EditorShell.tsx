@@ -10,6 +10,7 @@ import PlanView from '@/features/canvas2d/PlanView';
 import AssetLibrary from '@/features/library/AssetLibrary';
 import { PropsPanel, StatsPanel } from '@/features/inspector/Inspector';
 import ChatPanel from '@/features/chat/ChatPanel';
+import DesignPackageControls from '@/features/design-package/DesignPackageControls';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { fetchDesign, saveDesign } from '@/lib/api';
@@ -230,6 +231,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
         </div>
 
         <div className="flex-1" />
+        <DesignPackageControls document={doc} />
         <span className={`text-xs font-medium ${SAVE_TEXT[saveStatus].cls}`}>{SAVE_TEXT[saveStatus].label}</span>
       </header>
 

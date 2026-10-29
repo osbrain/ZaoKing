@@ -46,6 +46,37 @@ describe('level-aware design operations', () => {
     expect(outcome.cmds).toEqual([{ levelId: 'lv1', type: 'resize', id: 'sofa-1', size: { w: 2200 } }]);
   });
 
+  it('allows furniture dimensions to change while it overlaps a floor rug', () => {
+    const document = sofaDocument();
+    const level = document.levels[0];
+    const table = resolveAssetByQuery('茶几')!;
+    const rug = resolveAssetByQuery('地毯')!;
+    level.instances = [
+      { id: 'table-1', assetId: table.id, t: { x: 3000, y: 3000, rot: 0 } },
+      { id: 'rug-1', assetId: rug.id, t: { x: 3000, y: 3000, rot: 0 } },
+    ];
+
+    const outcome = executeOps(document, [{ op: 'resize_component', instanceId: 'table-1', widthMm: 1800 }]);
+
+    expect(outcome.cmds).toEqual([{ levelId: 'lv1', type: 'resize', id: 'table-1', size: { w: 1800 } }]);
+  });
+
+  it('still rejects a resize that collides with another piece of furniture', () => {
+    const document = sofaDocument();
+    const level = document.levels[0];
+    const table = resolveAssetByQuery('茶几')!;
+    const chair = resolveAssetByQuery('单人沙发')!;
+    level.instances = [
+      { id: 'table-1', assetId: table.id, t: { x: 2200, y: 3000, rot: 0 } },
+      { id: 'chair-1', assetId: chair.id, t: { x: 3500, y: 3000, rot: 0 } },
+    ];
+
+    const outcome = executeOps(document, [{ op: 'resize_component', instanceId: 'table-1', widthMm: 1800 }]);
+
+    expect(outcome.cmds).toHaveLength(0);
+    expect(outcome.log[0]).toContain('越界或与其他组件重叠');
+  });
+
   it('does not silently delete one of several same-name components', () => {
     const document = buildSeedDocument();
     const outcome = executeOps(document, [{ op: 'delete_component', room: '客厅', target: '绿植' }]);

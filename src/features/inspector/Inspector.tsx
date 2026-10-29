@@ -5,9 +5,10 @@
 import { useEffect, useState } from 'react';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
-import { assetById, materialById, MATERIALS } from '@/core/assets';
+import { assetById, materialById, materialCatalog } from '@/core/assets';
 import { instanceRef, uid, type Wall } from '@/core/types';
 import { polyArea } from '@/core/geometry';
+import { documentAssets, documentMaterials } from '@/core/sceneResources';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
 
@@ -58,12 +59,14 @@ export function PropsPanel() {
   const showToast = useEditorStore((s) => s.showToast);
 
   if (!doc) return null;
+  const assets = documentAssets(doc);
+  const materials = materialCatalog(documentMaterials(doc));
   const level = doc.levels[0];
 
   if (selection?.kind === 'furn') {
     const inst = level.instances.find((i) => i.id === selection.id);
     if (!inst) return <EmptyHint />;
-    const asset = assetById(inst.assetId, doc.assets);
+    const asset = assetById(inst.assetId, assets);
     const ref = instanceRef(inst, asset);
     const customParameters = asset?.geometry?.parameters;
     return (
@@ -148,7 +151,7 @@ export function PropsPanel() {
   if (selection?.kind === 'room') {
     const room = level.rooms.find((r) => r.id === selection.id);
     if (!room) return <EmptyHint />;
-    const mat = materialById(room.floorMaterialId);
+    const mat = materialById(room.floorMaterialId, materials);
     const area = polyArea(room.poly);
     return (
       <div className="space-y-4 p-4">
@@ -177,7 +180,7 @@ export function PropsPanel() {
         <div>
           <p className="mb-1.5 text-[11px] text-zinc-500">地面材质</p>
           <div className="grid grid-cols-2 gap-1.5">
-            {MATERIALS.map((m) => (
+            {materials.map((m) => (
               <button
                 key={m.id}
                 onClick={() => run('更换地面材质', [{ type: 'setRoomMaterial', roomId: room.id, materialId: m.id }])}
@@ -329,6 +332,7 @@ function EmptyHint() {
 export function StatsPanel() {
   const doc = useSceneStore((s) => s.doc);
   if (!doc) return null;
+  const materials = materialCatalog(documentMaterials(doc));
   const level = doc.levels[0];
   const counted = level.rooms.filter((r) => r.counted !== false);
   const totalArea = counted.reduce((a, r) => a + polyArea(r.poly), 0);
@@ -340,7 +344,7 @@ export function StatsPanel() {
   }
   let totalCost = 0;
   const matRows = [...byMat.entries()].map(([id, area]) => {
-    const m = materialById(id);
+    const m = materialById(id, materials);
     const cost = area * m.price * 1.05;
     totalCost += cost;
     return { m, area, cost };
@@ -355,7 +359,7 @@ export function StatsPanel() {
             {level.rooms.map((r) => (
               <tr key={r.id} className="border-b border-dashed border-zinc-100">
                 <td className="py-1.5">
-                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: materialById(r.floorMaterialId).sw }} />
+                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: materialById(r.floorMaterialId, materials).sw }} />
                   {r.name}
                   {r.counted === false && <span className="ml-1 text-zinc-400">*</span>}
                 </td>

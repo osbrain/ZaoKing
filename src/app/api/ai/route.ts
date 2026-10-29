@@ -6,10 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { DesignOp } from '@/core/ops';
 import { parseAiToolCalls } from '@/core/aiTools';
-import { assetCatalog, MATERIALS, parseWidthMm } from '@/core/assets';
+import { assetCatalog, materialCatalog, parseWidthMm } from '@/core/assets';
 import { pointInPoly } from '@/core/geometry';
 import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 import { instanceRef, type SceneDocument } from '@/core/types';
+import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import { getChatProviderConfig, type AiProviderConfig } from '@/lib/aiProvider';
 import { z } from 'zod';
 
@@ -19,7 +20,9 @@ export const dynamic = 'force-dynamic';
 /* ---------- 场景上下文包（带稳定 ID 和可编辑参数） ---------- */
 
 function packContext(doc: SceneDocument): string {
-  const catalog = assetCatalog(doc.assets);
+  const assets = documentAssets(doc);
+  const materials = materialCatalog(documentMaterials(doc));
+  const catalog = assetCatalog(assets);
   const lv = doc?.levels?.[0];
   if (!lv) return '（空文档）';
   const lines: string[] = [];
@@ -46,7 +49,7 @@ function packContext(doc: SceneDocument): string {
       return `  · ${cat}：${names.join('、')}`;
     })
     .join('\n');
-  return `【房间、墙体与现有布置】\n${lines.join('\n')}\n【可用材质】${MATERIALS.map((m) => m.name).join('、')}\n【组件库】\n${cats}`;
+  return `【房间、墙体与现有布置】\n${lines.join('\n')}\n【可用材质】${materials.map((m) => m.name).join('、')}\n【组件库】\n${cats}`;
 }
 
 const SYSTEM_PROMPT = `你是 ZaoKing 室内设计助手，通过调用工具函数操作用户的户型场景。

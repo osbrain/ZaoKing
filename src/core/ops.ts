@@ -6,7 +6,7 @@
  * ============================================================ */
 
 import type { Cmd } from './commands';
-import type { ComponentInstance, Level, Room, SceneDocument } from './types';
+import type { Asset, ComponentInstance, Level, Room, SceneDocument } from './types';
 import { uid } from './types';
 import {
   assetCatalog,
@@ -16,6 +16,7 @@ import {
   resolveMaterialByQuery,
 } from './assets';
 import { aabbOverlap, instAABB, pointInPoly, polyArea, solvePlacement } from './geometry';
+import { documentAssets, documentMaterials } from './sceneResources';
 
 export type DesignOp =
   | { op: 'add_component'; levelId?: string; room?: string; query: string }
@@ -63,7 +64,7 @@ export function resolveRoom(level: Level, name?: string): Room | null {
   );
 }
 
-function findInstances(level: Level, room: Room | null, target: string | undefined, instanceId: string | undefined, assets: SceneDocument['assets']) {
+function findInstances(level: Level, room: Room | null, target: string | undefined, instanceId: string | undefined, assets: readonly Asset[]) {
   return level.instances.filter((i) => {
     if (instanceId && i.id !== instanceId) return false;
     if (room && !pointInPoly([i.t.x, i.t.y], room.poly)) return false;
@@ -92,7 +93,7 @@ function colorByQuery(query: string): string | null {
   return colors.find(([pattern]) => pattern.test(query))?.[1] ?? null;
 }
 
-function targetForOp(level: Level, op: { room?: string; target?: string; instanceId?: string }, assets: SceneDocument['assets']) {
+function targetForOp(level: Level, op: { room?: string; target?: string; instanceId?: string }, assets: readonly Asset[]) {
   const room = op.room ? resolveRoom(level, op.room) : null;
   if (op.room && !room) return { error: `未找到房间「${op.room}」` };
   if (!op.instanceId && !op.target) return { error: '请指定要修改的组件' };
@@ -106,7 +107,8 @@ function targetForOp(level: Level, op: { room?: string; target?: string; instanc
   return { instance: matches[0] };
 }
 
-function fitsWithoutCollision(level: Level, inst: ComponentInstance, assets: SceneDocument['assets']) {
+function fitsWithoutCollision(level: Level, inst: ComponentInstance, assets: readonly Asset[]) {
+  const asset = assetById(inst.assetId, assets);
   const original = level.instances.find((candidate) => candidate.id === inst.id);
   const room = level.rooms.find((candidate) => pointInPoly(
     [original?.t.x ?? inst.t.x, original?.t.y ?? inst.t.y], candidate.poly,
@@ -122,6 +124,9 @@ function fitsWithoutCollision(level: Level, inst: ComponentInstance, assets: Sce
   const { hw, hh } = instAABB(inst, assets);
   return !level.instances.some((other) => {
     if (other.id === inst.id) return false;
+    // Rugs are floor coverings; furniture is expected to sit on top of them.
+    // They should not block furniture placement, movement, replacement, or resizing.
+    if (asset?.type === 'rug' || assetById(other.assetId, assets)?.type === 'rug') return false;
     const box = instAABB(other, assets);
     return aabbOverlap({ x: inst.t.x, y: inst.t.y, hw, hh }, { x: other.t.x, y: other.t.y, hw: box.hw, hh: box.hh });
   });
@@ -152,6 +157,8 @@ function wallTouchesRoom(wall: Level['walls'][number], room: Room) {
 export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
   const cmds: Cmd[] = [];
   const log: string[] = [];
+  const assets = documentAssets(doc);
+  const materials = documentMaterials(doc);
 
   for (const op of ops) {
     if (op.op === 'ask_user') {
@@ -169,9 +176,9 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
       case 'add_component': {
         const room = resolveRoom(level, op.room);
         if (!room) { log.push(`⚠ 未找到房间「${op.room ?? ''}」`); break; }
-        const asset = resolveAssetByQuery(op.query, doc.assets);
+        const asset = resolveAssetByQuery(op.query, assets);
         if (!asset) { log.push(`⚠ 组件库中没有找到「${op.query}」`); break; }
-        const p = solvePlacement(level, room, asset, { assets: doc.assets });
+        const p = solvePlacement(level, room, asset, { assets });
         if (!p) { log.push(`⚠「${room.name}」里没有足够的空位放置「${asset.name}」`); break; }
         cmds.push({
           levelId: level.id,
@@ -182,35 +189,35 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         break;
       }
       case 'replace_component': {
-        const { instance: inst, error } = targetForOp(level, op, doc.assets);
+        const { instance: inst, error } = targetForOp(level, op, assets);
         if (error || !inst) { log.push(`⚠ ${error}`); break; }
-        const cur = assetById(inst.assetId, doc.assets)!;
+        const cur = assetById(inst.assetId, assets)!;
         let next = null;
         const w = op.spec ? parseWidthMm(op.spec) : null;
         if (w) {
-          const candidate = assetCatalog(doc.assets).filter((a) => a.type === cur.type)
+          const candidate = assetCatalog(assets).filter((a) => a.type === cur.type)
             .sort((a, b) => Math.abs(a.w - w) - Math.abs(b.w - w))[0];
           if (candidate && Math.abs(candidate.w - w) <= 100) next = candidate;
         } else if (op.spec) {
-          next = resolveAssetByQuery(op.spec, doc.assets);
+          next = resolveAssetByQuery(op.spec, assets);
         }
         if (!next || next.id === cur.id) { log.push(`⚠ 没有满足「${op.spec ?? op.target}」的替换规格`); break; }
         const candidate = { ...inst, assetId: next.id, size: undefined, color: undefined };
-        if (!fitsWithoutCollision(level, candidate, doc.assets)) { log.push(`⚠ 替换后的「${next.name}」会越界或与其他组件重叠`); break; }
+        if (!fitsWithoutCollision(level, candidate, assets)) { log.push(`⚠ 替换后的「${next.name}」会越界或与其他组件重叠`); break; }
         cmds.push({ levelId: level.id, type: 'replaceAsset', id: inst.id, assetId: next.id });
         log.push(`✓ 已将「${cur.name}」换成「${next.name}」（位置朝向保留）`);
         break;
       }
       case 'delete_component': {
-        const { instance: inst, error } = targetForOp(level, op, doc.assets);
+        const { instance: inst, error } = targetForOp(level, op, assets);
         if (error || !inst) { log.push(`⚠ ${error}`); break; }
-        const a = assetById(inst.assetId, doc.assets)!;
+        const a = assetById(inst.assetId, assets)!;
         cmds.push({ levelId: level.id, type: 'delete', id: inst.id });
         log.push(`✓ 已删除「${a.name}」`);
         break;
       }
       case 'move_component': {
-        const { instance: inst, error } = targetForOp(level, op, doc.assets);
+        const { instance: inst, error } = targetForOp(level, op, assets);
         if (error || !inst) { log.push(`⚠ ${error}`); break; }
         const deltaX = op.dxMm ?? 0;
         const deltaY = op.dyMm ?? 0;
@@ -220,13 +227,13 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         }
         const t = { x: Math.round(inst.t.x + deltaX), y: Math.round(inst.t.y + deltaY), rot: ((inst.t.rot + rotation) % 360 + 360) % 360 };
         const candidate = { ...inst, t };
-        if (!fitsWithoutCollision(level, candidate, doc.assets)) { log.push('⚠ 移动后会越界或与其他组件重叠'); break; }
+        if (!fitsWithoutCollision(level, candidate, assets)) { log.push('⚠ 移动后会越界或与其他组件重叠'); break; }
         cmds.push({ levelId: level.id, type: 'move', id: inst.id, t });
-        log.push(`✓ 已移动「${assetById(inst.assetId, doc.assets)?.name ?? '组件'}」`);
+        log.push(`✓ 已移动「${assetById(inst.assetId, assets)?.name ?? '组件'}」`);
         break;
       }
       case 'resize_component': {
-        const { instance: inst, error } = targetForOp(level, op, doc.assets);
+        const { instance: inst, error } = targetForOp(level, op, assets);
         if (error || !inst) { log.push(`⚠ ${error}`); break; }
         const size = { w: op.widthMm, d: op.depthMm, h: op.heightMm };
         const updates = Object.fromEntries(Object.entries(size).filter(([, value]) => value !== undefined)) as { w?: number; d?: number; h?: number };
@@ -234,15 +241,15 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
           log.push('⚠ 尺寸必须在 10 到 20000 mm 之间'); break;
         }
         const candidate = { ...inst, size: { ...inst.size, ...updates } };
-        if (!fitsWithoutCollision(level, candidate, doc.assets)) { log.push('⚠ 调整尺寸后会越界或与其他组件重叠'); break; }
+        if (!fitsWithoutCollision(level, candidate, assets)) { log.push('⚠ 调整尺寸后会越界或与其他组件重叠'); break; }
         cmds.push({ levelId: level.id, type: 'resize', id: inst.id, size: updates });
-        log.push(`✓ 已调整「${assetById(inst.assetId, doc.assets)?.name ?? '组件'}」尺寸`);
+        log.push(`✓ 已调整「${assetById(inst.assetId, assets)?.name ?? '组件'}」尺寸`);
         break;
       }
       case 'set_component_parameters': {
-        const { instance: inst, error } = targetForOp(level, op, doc.assets);
+        const { instance: inst, error } = targetForOp(level, op, assets);
         if (error || !inst) { log.push(`⚠ ${error}`); break; }
-        const asset = assetById(inst.assetId, doc.assets);
+        const asset = assetById(inst.assetId, assets);
         const supported = asset?.geometry?.parameters ?? {};
         const parameters: NonNullable<ComponentInstance['parameters']> = {};
         for (const key of ['compartments', 'shelves', 'drawers', 'seats'] as const) {
@@ -261,12 +268,12 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         break;
       }
       case 'set_component_color': {
-        const { instance: inst, error } = targetForOp(level, op, doc.assets);
+        const { instance: inst, error } = targetForOp(level, op, assets);
         if (error || !inst) { log.push(`⚠ ${error}`); break; }
         const color = colorByQuery(op.query);
         if (!color) { log.push(`⚠ 无法识别颜色「${op.query}」`); break; }
         cmds.push({ levelId: level.id, type: 'setColor', id: inst.id, color });
-        log.push(`✓ 已将「${assetById(inst.assetId, doc.assets)?.name ?? '组件'}」颜色设为 ${color}`);
+        log.push(`✓ 已将「${assetById(inst.assetId, assets)?.name ?? '组件'}」颜色设为 ${color}`);
         break;
       }
       case 'set_wall_color': {
@@ -289,7 +296,7 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
       case 'set_floor_material': {
         const room = resolveRoom(level, op.room);
         if (!room) { log.push(`⚠ 未找到房间「${op.room ?? ''}」`); break; }
-        const mat = resolveMaterialByQuery(op.query);
+        const mat = resolveMaterialByQuery(op.query, materials);
         if (!mat) { log.push(`⚠ 材质库中没有匹配「${op.query}」的材质`); break; }
         cmds.push({ levelId: level.id, type: 'setRoomMaterial', roomId: room.id, materialId: mat.id });
         log.push(`✓ 已将${room.name}的地面换为「${mat.name}」（¥${mat.price}/m²）`);
