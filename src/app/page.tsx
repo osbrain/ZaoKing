@@ -100,7 +100,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-5 py-7 sm:px-8 sm:py-9">
+      <section className="mx-auto max-w-7xl px-5 py-7 sm:px-8 sm:py-9">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">我的项目</h2>
@@ -149,7 +149,7 @@ export default function HomePage() {
             <button type="button" onClick={() => void loadProjects(true)} className="rounded border border-red-200 bg-white px-3 py-1.5 font-medium hover:bg-red-100">重试</button>
           </div>
         ) : projects === null ? (
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 6 }, (_, index) => <div key={index} className="h-56 animate-pulse rounded-lg border border-zinc-200 bg-white" />)}
           </div>
         ) : projects.length === 0 ? (
@@ -168,7 +168,7 @@ export default function HomePage() {
         ) : (
           <>
             <div className="mb-3 mt-5 text-[11px] text-zinc-400">{search ? `找到 ${visibleProjects.length} 个项目` : `共 ${projects.length} 个项目`}</div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {visibleProjects.slice(0, visibleCount).map((project) => (
                 <ProjectCard
                   key={project.id}
