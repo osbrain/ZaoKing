@@ -39,6 +39,12 @@ export type FloorPlanDraft = z.infer<typeof FloorPlanDraftSchema>;
 
 const confidence = z.number().min(0).max(1).optional();
 const pixelPoint = z.tuple([z.number().finite(), z.number().finite()]);
+const FloorPlanPixelOpeningSchema = z.object({
+  kind: z.enum(['door', 'entry', 'window', 'sliding']),
+  rect: z.tuple([z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite()])
+    .refine(([x0, y0, x1, y1]) => x0 < x1 && y0 < y1, 'Opening rectangle must have positive width and height'),
+  confidence,
+}).strict();
 
 /** Vision-model coordinates are pixels in the original uploaded image, never millimetres. */
 export const FloorPlanPixelDraftSchema = z.object({
@@ -47,12 +53,7 @@ export const FloorPlanPixelDraftSchema = z.object({
     kind: z.enum(['bearing', 'exterior', 'partition', 'low']).optional(),
     confidence,
   }).strict()).min(1).max(1000),
-  openings: z.array(z.object({
-    kind: z.enum(['door', 'entry', 'window', 'sliding']),
-    rect: z.tuple([z.number().finite(), z.number().finite(), z.number().finite(), z.number().finite()])
-      .refine(([x0, y0, x1, y1]) => x0 < x1 && y0 < y1, 'Opening rectangle must have positive width and height'),
-    confidence,
-  }).strict()).max(1000).optional(),
+  openings: z.array(FloorPlanPixelOpeningSchema).max(1000).optional(),
   rooms: z.array(z.object({
     name: z.string().trim().min(1).max(60),
     poly: z.array(pixelPoint).min(3).max(256),
@@ -61,6 +62,82 @@ export const FloorPlanPixelDraftSchema = z.object({
 }).strict();
 
 export type FloorPlanPixelDraft = z.infer<typeof FloorPlanPixelDraftSchema>;
+
+const OPENING_KIND_ALIASES: Record<string, 'door' | 'entry' | 'window' | 'sliding'> = {
+  door: 'door',
+  swing_door: 'door',
+  hinged_door: 'door',
+  room_door: 'door',
+  平开门: 'door',
+  entry: 'entry',
+  entrance: 'entry',
+  entry_door: 'entry',
+  entrance_door: 'entry',
+  front_door: 'entry',
+  main_door: 'entry',
+  入户门: 'entry',
+  window: 'window',
+  casement_window: 'window',
+  落地窗: 'window',
+  飘窗: 'window',
+  sliding: 'sliding',
+  push_door: 'sliding',
+  sliding_door: 'sliding',
+  slidingdoor: 'sliding',
+  pocket_door: 'sliding',
+  移门: 'sliding',
+  推拉门: 'sliding',
+};
+
+export type NormalizedPixelDraft =
+  | { success: true; data: FloorPlanPixelDraft; warnings: string[] }
+  | { success: false; error: z.ZodError };
+
+/** Normalize common vision-model door labels and isolate malformed opening records. */
+export function normalizeVisionFloorPlanDraft(input: unknown): NormalizedPixelDraft {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    const parsed = FloorPlanPixelDraftSchema.safeParse(input);
+    return parsed.success ? { success: true, data: parsed.data, warnings: [] } : parsed;
+  }
+
+  const candidate = input as Record<string, unknown>;
+  if (!Array.isArray(candidate.openings)) {
+    const parsed = FloorPlanPixelDraftSchema.safeParse(input);
+    return parsed.success ? { success: true, data: parsed.data, warnings: [] } : parsed;
+  }
+
+  let aliased = 0;
+  let dropped = 0;
+  const openings: z.infer<typeof FloorPlanPixelOpeningSchema>[] = [];
+  for (const opening of candidate.openings) {
+    if (!opening || typeof opening !== 'object' || Array.isArray(opening)) {
+      dropped++;
+      continue;
+    }
+    const value = opening as Record<string, unknown>;
+    const rawKind = typeof value.kind === 'string' ? value.kind.trim().toLowerCase().replace(/[\s-]+/g, '_') : '';
+    const kind = OPENING_KIND_ALIASES[rawKind];
+    if (!kind) {
+      dropped++;
+      continue;
+    }
+    if (rawKind !== kind) aliased++;
+    const parsedOpening = FloorPlanPixelOpeningSchema.safeParse({ ...value, kind });
+    if (!parsedOpening.success) {
+      dropped++;
+      continue;
+    }
+    openings.push(parsedOpening.data);
+  }
+
+  const parsed = FloorPlanPixelDraftSchema.safeParse({ ...candidate, openings });
+  if (!parsed.success) return parsed;
+
+  const warnings: string[] = [];
+  if (aliased) warnings.push(`已兼容 ${aliased} 个模型返回的非标准门窗类型`);
+  if (dropped) warnings.push(`已忽略 ${dropped} 个无法识别或格式异常的门窗项，请核对户型`);
+  return { success: true, data: parsed.data, warnings };
+}
 
 /** Map model-image pixel coordinates back onto the original uploaded image. */
 export function scalePixelDraftCoordinates(

@@ -22,6 +22,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [draft, setDraft] = useState<FloorPlanPixelDraft | null>(null);
+  const [recognitionWarnings, setRecognitionWarnings] = useState<string[]>([]);
   const [points, setPoints] = useState<Vec2[]>([]);
   const [lengthMm, setLengthMm] = useState('');
   const [calibrating, setCalibrating] = useState(false);
@@ -69,6 +70,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
     setBusy(true);
     setError(null);
     setDraft(null);
+    setRecognitionWarnings([]);
     setPoints([]);
     onDocumentChangeRef.current(null, null, null);
     try {
@@ -84,6 +86,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
       if (!response.ok) throw new Error(payload.error ?? '户型识别失败');
       const parsed = FloorPlanPixelDraftSchema.safeParse(payload.draft);
       if (!parsed.success) throw new Error('识别结果格式无效，请换一张图片重试');
+      setRecognitionWarnings(Array.isArray(payload.warnings) ? payload.warnings.filter((warning: unknown) => typeof warning === 'string') : []);
       setDraft(parsed.data);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '户型识别失败');
@@ -121,6 +124,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
             onChange={(event) => {
               const next = event.target.files?.[0] ?? null;
               setFile(next); setDraft(null); setPoints([]); setImageSize(null); setError(null);
+              setRecognitionWarnings([]);
               onDocumentChangeRef.current(null, null, null);
             }}
           />
@@ -213,6 +217,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
       )}
 
       {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+      {recognitionWarnings.length > 0 && <p role="status" className="text-xs text-amber-800">{recognitionWarnings.join('；')}</p>}
       {!visionEnabled && <p className="text-xs text-amber-800">截图识别尚未启用，请在环境变量中设置 VISION_API_KEY（百炼 API Key）。</p>}
       {!error && draft && <p className="text-[11px] text-zinc-500">墙线、房间和门窗叠加在原图上。确认创建后仍可在 2D 编辑器中继续调整。</p>}
     </div>

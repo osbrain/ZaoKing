@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { FloorPlanPixelDraftSchema, scalePixelDraftCoordinates } from '@/core/floorplanImport';
+import { normalizeVisionFloorPlanDraft, scalePixelDraftCoordinates } from '@/core/floorplanImport';
 import { getVisionProviderConfig } from '@/lib/aiProvider';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const isDashScopeQwen3Vision = provider.baseUrl.includes('dashscope.aliyuncs.com')
     && provider.model.toLowerCase().startsWith('qwen3-vl');
   const prompt = `请解析这张俯视、正交的室内户型平面图。当前图片尺寸是 ${width}×${height} 像素。只返回 JSON，不要 Markdown 或解释。
-坐标必须是当前图片像素，原点在左上角，x 向右、y 向下；不要换算成毫米，不要输出图外坐标。墙线用中心线端点表示，轻微倾斜的墙尽可能吸附到水平或垂直方向。识别房间多边形、门、入户门、窗和推拉门；无法确定的实体可以省略。confidence 是 0 到 1 的视觉置信度。承重墙只有图中明确标识时才标 bearing，不要自行推断承重。
+坐标必须是当前图片像素，原点在左上角，x 向右、y 向下；不要换算成毫米，不要输出图外坐标。墙线用中心线端点表示，轻微倾斜的墙尽可能吸附到水平或垂直方向。只识别墙体上的真实门窗洞口，不要把家具、洁具、门扇弧线或装饰线当成洞口；同一洞口只输出一次。洞口 kind 必须严格使用 door、entry、window、sliding，推拉门或移门统一使用 sliding。无法确定的实体可以省略。confidence 是 0 到 1 的视觉置信度。承重墙只有图中明确标识时才标 bearing，不要自行推断承重。
 JSON 结构：{"walls":[{"x0":0,"y0":0,"x1":100,"y1":0,"kind":"partition","confidence":0.8}],"openings":[{"kind":"door","rect":[10,10,20,20],"confidence":0.7}],"rooms":[{"name":"客厅","poly":[[0,0],[100,0],[100,100],[0,100]],"confidence":0.8}]}`;
 
   try {
@@ -70,7 +70,7 @@ JSON 结构：{"walls":[{"x0":0,"y0":0,"x1":100,"y1":0,"kind":"partition","confi
       ? content.map((part: { type?: string; text?: string }) => part.text ?? '').join('\n')
       : '';
     const parsedJson = JSON.parse(text);
-    const parsed = FloorPlanPixelDraftSchema.safeParse(parsedJson);
+    const parsed = normalizeVisionFloorPlanDraft(parsedJson);
     if (!parsed.success) {
       console.error('[floorplan-import] invalid model draft:', parsed.error.issues.slice(0, 8));
       return NextResponse.json({ error: '识别结果结构不完整，请换一张更清晰的户型图' }, { status: 422 });
@@ -86,7 +86,7 @@ JSON 结构：{"walls":[{"x0":0,"y0":0,"x1":100,"y1":0,"kind":"partition","confi
       return NextResponse.json({ error: '识别坐标超出图片范围，请重新识别' }, { status: 422 });
     }
     const draft = scalePixelDraftCoordinates(parsed.data, { width, height }, { width: sourceWidth, height: sourceHeight });
-    return NextResponse.json({ widthPx: sourceWidth, heightPx: sourceHeight, draft });
+    return NextResponse.json({ widthPx: sourceWidth, heightPx: sourceHeight, draft, warnings: parsed.warnings });
   } catch (error) {
     if (error instanceof Error && error.name === 'TimeoutError') {
       console.warn('[floorplan-import] vision request timed out:', {

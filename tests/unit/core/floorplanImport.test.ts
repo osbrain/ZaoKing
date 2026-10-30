@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftToDocument, FloorPlanPixelDraftSchema, pixelDraftToMmDraft, scalePixelDraftCoordinates, type FloorPlanDraft } from '@/core/floorplanImport';
+import { draftToDocument, FloorPlanPixelDraftSchema, normalizeVisionFloorPlanDraft, pixelDraftToMmDraft, scalePixelDraftCoordinates, type FloorPlanDraft } from '@/core/floorplanImport';
 
 const D = (o: Partial<FloorPlanDraft>): FloorPlanDraft => ({ walls: [], openings: [], rooms: [], ...o });
 
@@ -174,5 +174,37 @@ describe('floorplanImport · 草稿规整', () => {
     expect(scaled.walls[0]).toMatchObject({ x0: 0, y0: 40, x1: 4000, y1: 40, confidence: 0.9 });
     expect(scaled.openings?.[0].rect).toEqual([1000, 40, 2000, 120]);
     expect(scaled.rooms?.[0].poly).toEqual([[0, 40], [4000, 40], [4000, 2000], [0, 2000]]);
+  });
+
+  it('normalizes common vision-model door labels such as push_door', () => {
+    const result = normalizeVisionFloorPlanDraft({
+      walls: [{ x0: 0, y0: 0, x1: 1000, y1: 0 }],
+      openings: [
+        { kind: 'push_door', rect: [100, 0, 250, 20] },
+        { kind: 'entrance_door', rect: [400, 0, 550, 20] },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.openings?.map((opening) => opening.kind)).toEqual(['sliding', 'entry']);
+    expect(result.warnings).toEqual(['已兼容 2 个模型返回的非标准门窗类型']);
+  });
+
+  it('ignores malformed opening items without discarding the recognized floorplan', () => {
+    const result = normalizeVisionFloorPlanDraft({
+      walls: [{ x0: 0, y0: 0, x1: 1000, y1: 0 }],
+      openings: [
+        { kind: 'door', rect: [100, 0, 250, 20] },
+        { kind: 'unknown_opening', rect: [300, 0, 450, 20] },
+        { kind: 'window', rect: [500, 0, 400, 20] },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.walls).toHaveLength(1);
+    expect(result.data.openings).toHaveLength(1);
+    expect(result.warnings).toEqual(['已忽略 2 个无法识别或格式异常的门窗项，请核对户型']);
   });
 });
