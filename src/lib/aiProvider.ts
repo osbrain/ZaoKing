@@ -11,6 +11,9 @@ export type VisionProviderConfig = Omit<AiProviderConfig, 'name'>;
 
 type Env = Record<string, string | undefined>;
 
+const QWEN_VISION_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+const QWEN_VISION_MODEL = 'qwen3-vl-plus';
+
 export function getChatProviderConfig(env: Env = process.env): AiProviderConfig | null {
   const deepseekKey = env.DEEPSEEK_API_KEY?.trim();
   if (deepseekKey) {
@@ -38,10 +41,15 @@ export function getChatProviderConfig(env: Env = process.env): AiProviderConfig 
 
 export function getVisionProviderConfig(env: Env = process.env): VisionProviderConfig | null {
   const visionKey = env.VISION_API_KEY?.trim();
-  const apiKey = visionKey || env.OPENAI_API_KEY?.trim();
+  const openAiKey = env.OPENAI_API_KEY?.trim();
+  const apiKey = visionKey || openAiKey;
   if (!apiKey) return null;
-  const baseUrl = env.VISION_BASE_URL?.trim() || env.OPENAI_BASE_URL?.trim();
-  const model = env.VISION_MODEL?.trim() || env.OPENAI_MODEL?.trim();
+  const baseUrl = env.VISION_BASE_URL?.trim() || (visionKey
+    ? QWEN_VISION_BASE_URL
+    : env.OPENAI_BASE_URL?.trim());
+  const model = env.VISION_MODEL?.trim() || (visionKey
+    ? QWEN_VISION_MODEL
+    : env.OPENAI_MODEL?.trim());
   return {
     apiKey,
     baseUrl: (baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, ''),

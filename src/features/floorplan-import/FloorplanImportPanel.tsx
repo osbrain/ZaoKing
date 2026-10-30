@@ -108,7 +108,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium text-ink">从户型截图生成初始平面</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500">支持清晰的平面图。图片会发送到配置的 AI 服务；识别后需用一段已知长度校准比例。</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">支持清晰的平面图。默认使用百炼 Qwen3-VL-Plus；识别后需用一段已知长度校准比例。</p>
         </div>
         <label className="cursor-pointer rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs hover:bg-zinc-100">
           选择图片
@@ -209,7 +209,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
       )}
 
       {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
-      {!visionEnabled && <p className="text-xs text-amber-800">截图识别需要配置可处理图片的 AI 模型。</p>}
+      {!visionEnabled && <p className="text-xs text-amber-800">截图识别尚未启用，请在环境变量中设置 VISION_API_KEY（百炼 API Key）。</p>}
       {!error && draft && <p className="text-[11px] text-zinc-500">墙线、房间和门窗叠加在原图上。确认创建后仍可在 2D 编辑器中继续调整。</p>}
     </div>
   );
