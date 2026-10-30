@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftToDocument, FloorPlanPixelDraftSchema, pixelDraftToMmDraft, type FloorPlanDraft } from '@/core/floorplanImport';
+import { draftToDocument, FloorPlanPixelDraftSchema, pixelDraftToMmDraft, scalePixelDraftCoordinates, type FloorPlanDraft } from '@/core/floorplanImport';
 
 const D = (o: Partial<FloorPlanDraft>): FloorPlanDraft => ({ walls: [], openings: [], rooms: [], ...o });
 
@@ -160,5 +160,19 @@ describe('floorplanImport · 草稿规整', () => {
       openings: [{ kind: 'window', rect: [80, 0, 20, 10] }],
     });
     expect(result.success).toBe(false);
+  });
+
+  it('maps resized vision-image coordinates back onto the original screenshot', () => {
+    const pixels = FloorPlanPixelDraftSchema.parse({
+      walls: [{ x0: 0, y0: 10, x1: 1000, y1: 10, confidence: 0.9 }],
+      openings: [{ kind: 'window', rect: [250, 10, 500, 30], confidence: 0.8 }],
+      rooms: [{ name: '客厅', poly: [[0, 10], [1000, 10], [1000, 500], [0, 500]], confidence: 0.7 }],
+    });
+
+    const scaled = scalePixelDraftCoordinates(pixels, { width: 1000, height: 500 }, { width: 4000, height: 2000 });
+
+    expect(scaled.walls[0]).toMatchObject({ x0: 0, y0: 40, x1: 4000, y1: 40, confidence: 0.9 });
+    expect(scaled.openings?.[0].rect).toEqual([1000, 40, 2000, 120]);
+    expect(scaled.rooms?.[0].poly).toEqual([[0, 40], [4000, 40], [4000, 2000], [0, 2000]]);
   });
 });

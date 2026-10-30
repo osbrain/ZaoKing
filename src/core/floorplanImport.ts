@@ -62,6 +62,31 @@ export const FloorPlanPixelDraftSchema = z.object({
 
 export type FloorPlanPixelDraft = z.infer<typeof FloorPlanPixelDraftSchema>;
 
+/** Map model-image pixel coordinates back onto the original uploaded image. */
+export function scalePixelDraftCoordinates(
+  draft: FloorPlanPixelDraft,
+  from: { width: number; height: number },
+  to: { width: number; height: number },
+): FloorPlanPixelDraft {
+  const scaleX = to.width / from.width;
+  const scaleY = to.height / from.height;
+  const point = ([x, y]: [number, number]): [number, number] => [x * scaleX, y * scaleY];
+  return {
+    walls: draft.walls.map((wall) => ({
+      ...wall,
+      x0: wall.x0 * scaleX,
+      y0: wall.y0 * scaleY,
+      x1: wall.x1 * scaleX,
+      y1: wall.y1 * scaleY,
+    })),
+    openings: draft.openings?.map((opening) => ({
+      ...opening,
+      rect: [opening.rect[0] * scaleX, opening.rect[1] * scaleY, opening.rect[2] * scaleX, opening.rect[3] * scaleY],
+    })),
+    rooms: draft.rooms?.map((room) => ({ ...room, poly: room.poly.map(point) })),
+  };
+}
+
 export function pixelDraftToMmDraft(
   draft: FloorPlanPixelDraft,
   reference: { a: [number, number]; b: [number, number]; lengthMm: number },

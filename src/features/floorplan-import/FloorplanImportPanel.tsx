@@ -9,6 +9,7 @@ import {
   type ImportReport,
 } from '@/core/floorplanImport';
 import type { SceneDocument, Vec2 } from '@/core/types';
+import { prepareVisionImage } from './prepareVisionImage';
 
 interface Props {
   projectName: string;
@@ -72,9 +73,12 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
     onDocumentChangeRef.current(null, null, null);
     try {
       const form = new FormData();
-      form.set('image', file);
-      form.set('widthPx', String(imageSize.width));
-      form.set('heightPx', String(imageSize.height));
+      const prepared = await prepareVisionImage(file);
+      form.set('image', prepared.file);
+      form.set('widthPx', String(prepared.widthPx));
+      form.set('heightPx', String(prepared.heightPx));
+      form.set('sourceWidthPx', String(imageSize.width));
+      form.set('sourceHeightPx', String(imageSize.height));
       const response = await fetch('/api/floorplan-import', { method: 'POST', body: form });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? '户型识别失败');
@@ -151,7 +155,7 @@ export default function FloorplanImportPanel({ projectName, visionEnabled, onDoc
 
           <div className="flex flex-wrap items-end gap-2">
             <button onClick={recognize} disabled={!imageSize || busy || !visionEnabled} className="rounded-md bg-ink px-3 py-2 text-xs font-medium text-white disabled:opacity-40">
-              {busy ? '识别中…' : draft ? '重新识别' : 'AI 识别户型'}
+              {busy ? '识别中（可能需要 1–3 分钟）…' : draft ? '重新识别' : 'AI 识别户型'}
             </button>
             {draft && (
               <>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { FloorPlanPixelDraftSchema } from '@/core/floorplanImport';
+import { FloorPlanPixelDraftSchema, scalePixelDraftCoordinates } from '@/core/floorplanImport';
 import { getVisionProviderConfig } from '@/lib/aiProvider';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 30_000_000;
+const VISION_REQUEST_TIMEOUT_MS = 180_000;
 
 function hasImageSignature(bytes: Uint8Array, type: string) {
   if (type === 'image/png') return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
@@ -23,7 +24,11 @@ export async function POST(request: Request) {
   const file = form?.get('image');
   const width = Number(form?.get('widthPx'));
   const height = Number(form?.get('heightPx'));
-  if (!(file instanceof File) || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > MAX_IMAGE_PIXELS) {
+  const sourceWidth = Number(form?.get('sourceWidthPx') ?? width);
+  const sourceHeight = Number(form?.get('sourceHeightPx') ?? height);
+  if (!(file instanceof File) || ![width, height, sourceWidth, sourceHeight].every(Number.isInteger)
+    || width < 1 || height < 1 || sourceWidth < 1 || sourceHeight < 1
+    || width * height > MAX_IMAGE_PIXELS || sourceWidth * sourceHeight > MAX_IMAGE_PIXELS) {
     return NextResponse.json({ error: '请上传有效的户型图片' }, { status: 400 });
   }
   if (file.size < 1 || file.size > MAX_IMAGE_BYTES || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
@@ -33,18 +38,21 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (!hasImageSignature(bytes, file.type)) return NextResponse.json({ error: '图片格式与文件内容不匹配' }, { status: 400 });
   const dataUrl = `data:${file.type};base64,${Buffer.from(bytes).toString('base64')}`;
-  const prompt = `请解析这张俯视、正交的室内户型平面图。图片原始尺寸是 ${width}×${height} 像素。只返回 JSON，不要 Markdown 或解释。
-坐标必须是原图像素，原点在左上角，x 向右、y 向下；不要换算成毫米，不要输出图外坐标。墙线用中心线端点表示，轻微倾斜的墙尽可能吸附到水平或垂直方向。识别房间多边形、门、入户门、窗和推拉门；无法确定的实体可以省略。confidence 是 0 到 1 的视觉置信度。承重墙只有图中明确标识时才标 bearing，不要自行推断承重。
+  const isDashScopeQwen3Vision = provider.baseUrl.includes('dashscope.aliyuncs.com')
+    && provider.model.toLowerCase().startsWith('qwen3-vl');
+  const prompt = `请解析这张俯视、正交的室内户型平面图。当前图片尺寸是 ${width}×${height} 像素。只返回 JSON，不要 Markdown 或解释。
+坐标必须是当前图片像素，原点在左上角，x 向右、y 向下；不要换算成毫米，不要输出图外坐标。墙线用中心线端点表示，轻微倾斜的墙尽可能吸附到水平或垂直方向。识别房间多边形、门、入户门、窗和推拉门；无法确定的实体可以省略。confidence 是 0 到 1 的视觉置信度。承重墙只有图中明确标识时才标 bearing，不要自行推断承重。
 JSON 结构：{"walls":[{"x0":0,"y0":0,"x1":100,"y1":0,"kind":"partition","confidence":0.8}],"openings":[{"kind":"door","rect":[10,10,20,20],"confidence":0.7}],"rooms":[{"name":"客厅","poly":[[0,0],[100,0],[100,100],[0,100]],"confidence":0.8}]}`;
 
   try {
     const response = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey}` },
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(VISION_REQUEST_TIMEOUT_MS),
       body: JSON.stringify({
         model: provider.model,
         temperature: 0,
+        ...(isDashScopeQwen3Vision ? { enable_thinking: false } : {}),
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: [
           { type: 'text', text: prompt },
@@ -77,8 +85,17 @@ JSON 结构：{"walls":[{"x0":0,"y0":0,"x1":100,"y1":0,"kind":"partition","confi
     if (!allPoints.every(([x, y]) => inBounds(x, y))) {
       return NextResponse.json({ error: '识别坐标超出图片范围，请重新识别' }, { status: 422 });
     }
-    return NextResponse.json({ widthPx: width, heightPx: height, draft: parsed.data });
+    const draft = scalePixelDraftCoordinates(parsed.data, { width, height }, { width: sourceWidth, height: sourceHeight });
+    return NextResponse.json({ widthPx: sourceWidth, heightPx: sourceHeight, draft });
   } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      console.warn('[floorplan-import] vision request timed out:', {
+        model: provider.model,
+        imageBytes: file.size,
+        timeoutMs: VISION_REQUEST_TIMEOUT_MS,
+      });
+      return NextResponse.json({ error: '户型识别耗时过长，视觉模型在 3 分钟内未返回结果。请稍后重试，或上传更清晰且范围更紧凑的户型图。' }, { status: 504 });
+    }
     console.error('[floorplan-import] request failed:', error);
     return NextResponse.json({ error: '户型识别失败，请稍后重试' }, { status: 502 });
   }
