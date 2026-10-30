@@ -139,6 +139,31 @@ export function normalizeVisionFloorPlanDraft(input: unknown): NormalizedPixelDr
   return { success: true, data: parsed.data, warnings };
 }
 
+export interface PixelDraftBoundsReport {
+  draft: FloorPlanPixelDraft;
+  droppedWalls: number;
+  droppedOpenings: number;
+  droppedRooms: number;
+}
+
+/** Keep valid geometry when the vision model places unrelated marks outside the image. */
+export function keepPixelDraftWithinBounds(
+  draft: FloorPlanPixelDraft,
+  bounds: { width: number; height: number },
+): PixelDraftBoundsReport {
+  const inBounds = ([x, y]: [number, number]) => x >= 0 && y >= 0 && x <= bounds.width && y <= bounds.height;
+  const walls = draft.walls.filter((wall) => inBounds([wall.x0, wall.y0]) && inBounds([wall.x1, wall.y1]));
+  const openings = (draft.openings ?? []).filter((opening) =>
+    inBounds([opening.rect[0], opening.rect[1]]) && inBounds([opening.rect[2], opening.rect[3]]));
+  const rooms = (draft.rooms ?? []).filter((room) => room.poly.every(inBounds));
+  return {
+    draft: { ...draft, walls, openings, rooms },
+    droppedWalls: draft.walls.length - walls.length,
+    droppedOpenings: (draft.openings?.length ?? 0) - openings.length,
+    droppedRooms: (draft.rooms?.length ?? 0) - rooms.length,
+  };
+}
+
 /** Map model-image pixel coordinates back onto the original uploaded image. */
 export function scalePixelDraftCoordinates(
   draft: FloorPlanPixelDraft,

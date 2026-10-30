@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { draftToDocument, FloorPlanPixelDraftSchema, normalizeVisionFloorPlanDraft, pixelDraftToMmDraft, scalePixelDraftCoordinates, type FloorPlanDraft } from '@/core/floorplanImport';
+import { draftToDocument, FloorPlanPixelDraftSchema, keepPixelDraftWithinBounds, normalizeVisionFloorPlanDraft, pixelDraftToMmDraft, scalePixelDraftCoordinates, type FloorPlanDraft } from '@/core/floorplanImport';
 
 const D = (o: Partial<FloorPlanDraft>): FloorPlanDraft => ({ walls: [], openings: [], rooms: [], ...o });
 
@@ -206,5 +206,29 @@ describe('floorplanImport · 草稿规整', () => {
     expect(result.data.walls).toHaveLength(1);
     expect(result.data.openings).toHaveLength(1);
     expect(result.warnings).toEqual(['已忽略 2 个无法识别或格式异常的门窗项，请核对户型']);
+  });
+
+  it('keeps in-image geometry and reports only objects outside the screenshot', () => {
+    const pixels = FloorPlanPixelDraftSchema.parse({
+      walls: [
+        { x0: 10, y0: 10, x1: 900, y1: 10 },
+        { x0: 10, y0: 1100, x1: 900, y1: 1100 },
+      ],
+      openings: [
+        { kind: 'door', rect: [100, 10, 200, 20] },
+        { kind: 'window', rect: [100, 1100, 200, 1120] },
+      ],
+      rooms: [
+        { name: '客厅', poly: [[20, 20], [800, 20], [800, 800], [20, 800]] },
+        { name: '越界房间', poly: [[20, 20], [800, 20], [1200, 800]] },
+      ],
+    });
+
+    const bounded = keepPixelDraftWithinBounds(pixels, { width: 1000, height: 1000 });
+
+    expect(bounded.draft.walls).toHaveLength(1);
+    expect(bounded.draft.openings).toHaveLength(1);
+    expect(bounded.draft.rooms?.map((room) => room.name)).toEqual(['客厅']);
+    expect(bounded).toMatchObject({ droppedWalls: 1, droppedOpenings: 1, droppedRooms: 1 });
   });
 });
