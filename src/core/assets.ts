@@ -29,7 +29,7 @@ export const materialCatalog = (projectMaterials: readonly Material[] = []): Mat
 
 /** 3D 占位体高度（mm），按原型类型 */
 export const TYPE_H: Record<string, number> = {
-  bed: 450, bunkbed: 1900, crib: 900, nightstand: 500, wardrobe: 2100, dresser: 800,
+  bed: 1100, bunkbed: 1900, crib: 900, nightstand: 500, wardrobe: 2100, dresser: 800,
   desk: 760, chair: 880, bookshelf: 1800, baycushion: 250, sofa: 800,
   cornersofa: 850, armchair: 800, beanbag: 550, coffeetable: 450,
   sidetable: 500, tvstand: 500, rug: 15, shoecab: 1000, floorlamp: 1600,
