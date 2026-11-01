@@ -6,6 +6,7 @@
 import type { Asset, ComponentInstance, Level, Opening, Room, Vec2 } from './types';
 import { instanceRef } from './types';
 import { assetById } from './assets';
+import { analyzeDoorApproaches, analyzeFrontAccess, analyzeSlidingDoorPockets, analyzeUsageClearances } from './clearance';
 
 export const polyArea = (poly: Vec2[]): number =>
   Math.abs(
@@ -215,6 +216,11 @@ export function doorSwingPolygon(opening: Opening): Vec2[] | null {
   return [opening.hinge, ...arc];
 }
 
+function openingFootprint(opening: Opening): Vec2[] {
+  const [x0, y0, x1, y1] = opening.rect;
+  return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+}
+
 function allowsIntentionalFootprintOverlap(a: Asset | undefined, b: Asset | undefined) {
   if (a?.type === 'rug' || b?.type === 'rug') return true;
 
@@ -225,7 +231,7 @@ function allowsIntentionalFootprintOverlap(a: Asset | undefined, b: Asset | unde
 }
 
 export interface PlacementIssue {
-  code: 'no-room' | 'outside-room' | 'overlap' | 'door-swing';
+  code: 'no-room' | 'outside-room' | 'overlap' | 'door-swing' | 'opening-blocked';
   message: string;
   relatedInstanceId?: string;
 }
@@ -266,6 +272,16 @@ export function validateComponentPlacement(
     });
   }
 
+  const blockedOpening = level.openings.find((opening) =>
+    opening.kind !== 'window' && orientedRectanglesOverlap(corners, openingFootprint(opening)));
+  if (blockedOpening) {
+    const openingName = blockedOpening.kind === 'entry' ? '入户门' : blockedOpening.kind === 'sliding' ? '推拉门' : '房门';
+    issues.push({
+      code: 'opening-blocked',
+      message: `家具占用${openingName}通行口，建议移开家具`,
+    });
+  }
+
   if (options.checkCollisions !== false) {
     const asset = assetById(instance.assetId, assets);
     const bounds = polyBBox(corners);
@@ -287,10 +303,12 @@ export function validateComponentPlacement(
 }
 
 export interface LayoutCheck {
-  code: PlacementIssue['code'];
+  code: PlacementIssue['code'] | 'usage-clearance' | 'aisle-clearance' | 'front-access-clearance' | 'sliding-pocket';
   message: string;
-  instanceId: string;
+  instanceId?: string;
+  openingId?: string;
   relatedInstanceId?: string;
+  severity?: 'review';
 }
 
 export function analyzeLevelLayout(level: Level, assets: readonly Asset[] = []): LayoutCheck[] {
@@ -318,6 +336,62 @@ export function analyzeLevelLayout(level: Level, assets: readonly Asset[] = []):
       if (!orientedRectanglesOverlap(current.corners, candidate.corners)) continue;
       checks.push({ code: 'overlap', message: '家具与其他组件重叠', instanceId: current.instance.id, relatedInstanceId: candidate.instance.id });
     }
+  }
+
+  const clearanceShapes = shapes.map(({ instance, corners }) => {
+    const asset = assetById(instance.assetId, assets);
+    const dimensions = instanceRef(instance, asset);
+    return {
+      instance,
+      type: asset?.type,
+      shape: asset?.geometry?.shape,
+      widthMm: dimensions.w,
+      depthMm: dimensions.d,
+      parameters: { ...asset?.geometry?.parameters, ...instance.parameters },
+      footprint: corners,
+    };
+  });
+  const frontAccessChecks = analyzeFrontAccess(clearanceShapes, level.rooms);
+  const frontAccessPairs = new Set(frontAccessChecks.map(({ instanceId, relatedInstanceId }) =>
+    [instanceId, relatedInstanceId].sort().join(':')));
+  const usageClearances = analyzeUsageClearances(clearanceShapes, level.rooms).filter(({ instanceId, relatedInstanceId }) =>
+    !frontAccessPairs.has([instanceId, relatedInstanceId].sort().join(':')));
+  for (const clearance of usageClearances) {
+    checks.push({
+      code: 'usage-clearance',
+      severity: 'review',
+      message: clearance.message,
+      instanceId: clearance.instanceId,
+      relatedInstanceId: clearance.relatedInstanceId,
+    });
+  }
+  for (const clearance of frontAccessChecks) {
+    checks.push({
+      code: 'front-access-clearance',
+      severity: 'review',
+      message: clearance.message,
+      instanceId: clearance.instanceId,
+      relatedInstanceId: clearance.relatedInstanceId,
+    });
+  }
+  const aisleClearances = analyzeDoorApproaches(level.openings, level.rooms, clearanceShapes);
+  for (const clearance of aisleClearances) {
+    checks.push({
+      code: 'aisle-clearance',
+      severity: 'review',
+      message: clearance.message,
+      openingId: clearance.openingId,
+    });
+  }
+  const slidingPocketChecks = analyzeSlidingDoorPockets(level.openings, clearanceShapes);
+  for (const clearance of slidingPocketChecks) {
+    checks.push({
+      code: 'sliding-pocket',
+      severity: 'review',
+      message: clearance.message,
+      openingId: clearance.openingId,
+      relatedInstanceId: clearance.instanceId,
+    });
   }
   return checks;
 }

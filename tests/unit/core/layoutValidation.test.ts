@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeLevelLayout, orientedRectCorners, orientedRectanglesOverlap, validateComponentPlacement } from '@/core/geometry';
 import { resolveAssetByQuery } from '@/core/assets';
-import { buildBlankDocument } from '@/core/seed';
+import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
 
 describe('shared layout constraints', () => {
   it('uses oriented rectangles so rotated furniture does not get false-positive AABB collisions', () => {
@@ -92,9 +92,169 @@ describe('shared layout constraints', () => {
     const sofa = resolveAssetByQuery('三人沙发')!;
     level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
     level.openings.push({ id: 'slider', kind: 'sliding', rect: [1400, 1400, 1600, 2300], height: 2400, sill: 0 });
-    const instance = { id: 'sofa', assetId: sofa.id, t: { x: 2600, y: 1500, rot: 0 }, size: { w: 300, d: 300 } };
+    const instance = { id: 'sofa', assetId: sofa.id, t: { x: 3400, y: 1500, rot: 0 }, size: { w: 300, d: 300 } };
 
     expect(validateComponentPlacement(level, instance, [sofa]).valid).toBe(true);
     expect(analyzeLevelLayout(level, [sofa])).toEqual([]);
+  });
+
+  it('flags furniture that blocks a sliding-door opening without reporting a hinged swing', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.openings.push({ id: 'slider', kind: 'sliding', rect: [1400, 1400, 1600, 2300], height: 2400, sill: 0 });
+    const instance = { id: 'sofa', assetId: sofa.id, t: { x: 1500, y: 1850, rot: 0 }, size: { w: 300, d: 300 } };
+
+    const issues = validateComponentPlacement(level, instance, [sofa]).issues;
+    expect(issues.map((issue) => issue.code)).toContain('opening-blocked');
+    expect(issues.map((issue) => issue.code)).not.toContain('door-swing');
+  });
+
+  it('checks the selected wall-pocket side for horizontal and vertical sliding doors', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.openings.push({ id: 'horizontal-slider', kind: 'sliding', rect: [1000, 2400, 3000, 2600], height: 2400, sill: 0, vertical: false, slideMode: 'pocket-start' });
+    level.instances = [{ id: 'sofa', assetId: sofa.id, t: { x: 600, y: 2500, rot: 0 }, size: { w: 400, d: 400 } }];
+
+    expect(analyzeLevelLayout(level, [sofa])).toContainEqual(expect.objectContaining({
+      code: 'sliding-pocket', severity: 'review', openingId: 'horizontal-slider', relatedInstanceId: 'sofa',
+      message: expect.stringContaining('左端'),
+    }));
+
+    level.instances[0] = { ...level.instances[0], t: { x: 3600, y: 2500, rot: 0 }, size: { w: 600, d: 400 } };
+    expect(analyzeLevelLayout(level, [sofa]).some((check) => check.code === 'sliding-pocket')).toBe(false);
+    level.openings[0].slideMode = 'pocket-end';
+    expect(analyzeLevelLayout(level, [sofa])).toContainEqual(expect.objectContaining({
+      code: 'sliding-pocket', openingId: 'horizontal-slider', relatedInstanceId: 'sofa',
+      message: expect.stringContaining('右端'),
+    }));
+
+    level.instances[0] = { ...level.instances[0], t: { x: 4400, y: 2500, rot: 0 } };
+    expect(analyzeLevelLayout(level, [sofa]).some((check) => check.code === 'sliding-pocket')).toBe(false);
+
+    level.openings = [{ id: 'vertical-slider', kind: 'sliding', rect: [2400, 1000, 2600, 3000], height: 2400, sill: 0, vertical: true, slideMode: 'pocket-start' }];
+    level.instances[0] = { ...level.instances[0], t: { x: 2500, y: 600, rot: 0 } };
+    expect(analyzeLevelLayout(level, [sofa])).toContainEqual(expect.objectContaining({
+      code: 'sliding-pocket', severity: 'review', openingId: 'vertical-slider', relatedInstanceId: 'sofa',
+      message: expect.stringContaining('上端'),
+    }));
+  });
+
+  it('does not flag the built-in example layout for sliding-door pocket obstruction', () => {
+    const level = buildSeedDocument().levels[0];
+
+    expect(analyzeLevelLayout(level).filter((check) => check.code === 'sliding-pocket')).toEqual([]);
+  });
+
+  it('reports tight sofa-to-coffee-table clearance as a review suggestion with measured distance', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    const table = resolveAssetByQuery('茶几')!;
+    const assets = [sofa, table];
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.instances = [
+      { id: 'sofa', assetId: sofa.id, t: { x: 1500, y: 2000, rot: 0 }, size: { w: 2000, d: 800 } },
+      { id: 'table', assetId: table.id, t: { x: 1500, y: 2825, rot: 0 }, size: { w: 1000, d: 500 } },
+    ];
+
+    expect(analyzeLevelLayout(level, assets)).toContainEqual(expect.objectContaining({
+      code: 'usage-clearance',
+      severity: 'review',
+      instanceId: 'sofa',
+      relatedInstanceId: 'table',
+      message: expect.stringContaining('175 mm'),
+    }));
+  });
+
+  it('does not report usage clearance when the furniture has sufficient space or belongs to another room', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const bed = resolveAssetByQuery('双人床')!;
+    const wardrobe = resolveAssetByQuery('衣柜')!;
+    level.rooms.push(
+      { id: 'bedroom', name: '卧室', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' },
+      { id: 'study', name: '书房', poly: [[6000, 0], [9000, 0], [9000, 4000], [6000, 4000]], floorMaterialId: 'wood' },
+    );
+    level.instances = [
+      { id: 'bed', assetId: bed.id, t: { x: 2000, y: 2000, rot: 0 } },
+      { id: 'wardrobe', assetId: wardrobe.id, t: { x: 2000, y: 4000, rot: 0 } },
+    ];
+
+    expect(analyzeLevelLayout(level, [bed, wardrobe]).some((check) => check.code === 'usage-clearance')).toBe(false);
+    level.instances[1] = { ...level.instances[1], t: { x: 7500, y: 2000, rot: 0 } };
+    expect(analyzeLevelLayout(level, [bed, wardrobe]).some((check) => check.code === 'usage-clearance')).toBe(false);
+  });
+
+  it('estimates the narrowest 1 m door approach and reports the measured free width', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.openings.push({ id: 'entry', kind: 'entry', rect: [1400, 1400, 1600, 2300], height: 2100, sill: 0 });
+    level.instances = [{
+      id: 'sofa', assetId: sofa.id, t: { x: 2000, y: 1850, rot: 0 }, size: { w: 800, d: 800 },
+    }];
+
+    expect(analyzeLevelLayout(level, [sofa])).toContainEqual(expect.objectContaining({
+      code: 'aisle-clearance',
+      severity: 'review',
+      openingId: 'entry',
+      message: expect.stringContaining('50 mm'),
+    }));
+  });
+
+  it('checks refrigerator front access in the component facing direction', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const fridge = resolveAssetByQuery('双开门冰箱')!;
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    const assets = [fridge, sofa];
+    level.rooms.push({ id: 'kitchen', name: '厨房', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.instances = [
+      { id: 'fridge', assetId: fridge.id, t: { x: 2000, y: 2000, rot: 0 }, size: { w: 700, d: 700 } },
+      { id: 'sofa', assetId: sofa.id, t: { x: 2000, y: 2900, rot: 0 }, size: { w: 500, d: 500 } },
+    ];
+
+    expect(analyzeLevelLayout(level, assets)).toContainEqual(expect.objectContaining({
+      code: 'front-access-clearance',
+      severity: 'review',
+      instanceId: 'fridge',
+      relatedInstanceId: 'sofa',
+      message: expect.stringContaining('300 mm'),
+    }));
+
+    level.instances[1] = { ...level.instances[1], t: { x: 2000, y: 1000, rot: 0 } };
+    expect(analyzeLevelLayout(level, assets).some((check) => check.code === 'front-access-clearance')).toBe(false);
+
+    level.instances[0] = { ...level.instances[0], t: { ...level.instances[0].t, rot: 180 } };
+    expect(analyzeLevelLayout(level, assets)).toContainEqual(expect.objectContaining({
+      code: 'front-access-clearance',
+      instanceId: 'fridge',
+      relatedInstanceId: 'sofa',
+      message: expect.stringContaining('400 mm'),
+    }));
+  });
+
+  it('checks clearance for modeled drawer fronts', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const nightstand = resolveAssetByQuery('床头柜')!;
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'bedroom', name: '卧室', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.instances = [
+      { id: 'nightstand', assetId: nightstand.id, t: { x: 2500, y: 2000, rot: 0 } },
+      { id: 'sofa', assetId: sofa.id, t: { x: 2500, y: 2550, rot: 0 }, size: { w: 500, d: 500 } },
+    ];
+
+    expect(analyzeLevelLayout(level, [nightstand, sofa])).toContainEqual(expect.objectContaining({
+      code: 'front-access-clearance',
+      instanceId: 'nightstand',
+      relatedInstanceId: 'sofa',
+      message: expect.stringContaining('100 mm'),
+    }));
   });
 });

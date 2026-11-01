@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dimensionLayout, dimsSvg, furnSVG, materialPatternId } from '@/core/symbols2d';
+import { dimensionLayout, dimsSvg, furnSVG, materialPatternId, openingsSvg } from '@/core/symbols2d';
 import type { Level } from '@/core/types';
 
 const level: Level = {
@@ -35,6 +35,18 @@ describe('2D dimensions', () => {
     const blank: Level = { id: 'lv1', name: '一层', elevation: 0, walls: [], rooms: [], openings: [], instances: [] };
     expect(dimensionLayout(blank)).toBeNull();
     expect(dimsSvg(blank)).toBe('');
+  });
+});
+
+describe('sliding door pocket symbols', () => {
+  it('marks the selected wall pocket using the modeled leaf travel', () => {
+    const svg = openingsSvg({
+      ...level,
+      openings: [{ id: 'slider', kind: 'sliding', rect: [1000, 1000, 2000, 1200], height: 2400, sill: 0, slideMode: 'pocket-start' }],
+    });
+
+    expect(svg).toContain('x="450" y="1000" width="550" height="200"');
+    expect(svg).toContain('stroke-dasharray="5 3"');
   });
 });
 

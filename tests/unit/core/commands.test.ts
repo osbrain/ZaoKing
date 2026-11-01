@@ -30,6 +30,15 @@ describe('level-scoped commands', () => {
     expect(updated.levels[1].walls).toHaveLength(1);
   });
 
+  it('updates the sliding-door mode through the shared opening command', () => {
+    const document = buildBlankDocument();
+    document.levels[0].openings = [{ id: 'slider', kind: 'sliding', rect: [100, 100, 1200, 300], height: 2400, sill: 0 }];
+    const updated = applyCmds(document, [{ type: 'setOpening', id: 'slider', slideMode: 'pocket-end' }]);
+
+    expect(updated.levels[0].openings[0].slideMode).toBe('pocket-end');
+    expect(document.levels[0].openings[0].slideMode).toBeUndefined();
+  });
+
   it('keeps open cabinet bays within the updated partition count', () => {
     const document = buildBlankDocument();
     document.levels[0].instances = [{

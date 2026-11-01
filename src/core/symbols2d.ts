@@ -8,6 +8,7 @@
 import type { Asset, Level, Material } from './types';
 import { MATERIALS } from './assets';
 import { docBBox } from './geometry';
+import { SLIDING_LEAF_TRAVEL_RATIO } from './clearance';
 
 /* ---------- 基础工具 ---------- */
 
@@ -358,14 +359,19 @@ export function openingsSvg(level: Level): string {
       s += `<polygon points="${hx},${hy} ${ox},${oy} ${ox + o.closeDir[0] * T},${oy + o.closeDir[1] * T} ${hx + o.closeDir[0] * T},${hy + o.closeDir[1] * T}" fill="#fff" stroke="${col}" stroke-width="${o.kind === 'entry' ? 1.8 : 1}" vector-effect="non-scaling-stroke"/>`;
       s += `<path d="M${ox} ${oy}A${L} ${L} 0 0 ${sweep} ${cx2} ${cy2}" fill="none" ${DS} stroke-dasharray="5 3" opacity=".7"/>`;
     } else if (o.kind === 'sliding') {
+      const travel = (w >= h ? w : h) * SLIDING_LEAF_TRAVEL_RATIO;
       if (o.vertical) {
         const L = y1 - y0;
         const mx = (x0 + x1) / 2;
         s += `<rect x="${mx - 45}" y="${y0}" width="40" height="${L * 0.55}" fill="#fff" ${DS}/><rect x="${mx + 5}" y="${y1 - L * 0.55}" width="40" height="${L * 0.55}" fill="#fff" ${DS}/>`;
+        if (o.slideMode === 'pocket-start') s += `<rect x="${x0}" y="${y0 - travel}" width="${w}" height="${travel}" fill="#b5653a" fill-opacity=".08" stroke="#b5653a" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+        if (o.slideMode === 'pocket-end') s += `<rect x="${x0}" y="${y1}" width="${w}" height="${travel}" fill="#b5653a" fill-opacity=".08" stroke="#b5653a" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
       } else {
         const L = x1 - x0;
         const my = (y0 + y1) / 2;
         s += `<rect x="${x0}" y="${my - 45}" width="${L * 0.55}" height="40" fill="#fff" ${DS}/><rect x="${x1 - L * 0.55}" y="${my + 5}" width="${L * 0.55}" height="40" fill="#fff" ${DS}/>`;
+        if (o.slideMode === 'pocket-start') s += `<rect x="${x0 - travel}" y="${y0}" width="${travel}" height="${h}" fill="#b5653a" fill-opacity=".08" stroke="#b5653a" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+        if (o.slideMode === 'pocket-end') s += `<rect x="${x1}" y="${y0}" width="${travel}" height="${h}" fill="#b5653a" fill-opacity=".08" stroke="#b5653a" stroke-dasharray="5 3" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
       }
     }
   }

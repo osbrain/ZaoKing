@@ -69,6 +69,18 @@ describe('floorplanImport · 草稿规整', () => {
     expect(o.closeDir).toEqual([0, 1]);
   });
 
+  it('截图识别的推拉门默认采用洞口内双轨，不推断墙体收纳侧', () => {
+    const { doc } = draftToDocument(
+      D({
+        walls: [{ x0: 0, y0: 0, x1: 6000, y1: 240 }],
+        openings: [{ kind: 'sliding', rect: [2000, 20, 3000, 220] }],
+      }),
+      '截图导入',
+    );
+
+    expect(doc!.levels[0].openings[0]).toMatchObject({ kind: 'sliding', slideMode: 'bypass' });
+  });
+
   it('吸附不上的洞口被丢弃并给出告警', () => {
     const { report, doc } = draftToDocument(
       D({ walls: [{ x0: 0, y0: 0, x1: 3000, y1: 240 }], openings: [{ kind: 'window', rect: [20000, 20000, 21000, 20100] }] }),

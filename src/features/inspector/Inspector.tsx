@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { assetById, materialById, materialCatalog } from '@/core/assets';
-import { instanceRef, uid, type Wall } from '@/core/types';
+import { instanceRef, uid, type Opening, type Wall } from '@/core/types';
 import { analyzeLevelLayout, polyArea } from '@/core/geometry';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
 
@@ -298,6 +298,25 @@ export function PropsPanel() {
             <NumberField label="窗台高 (mm)" value={o.sill} onCommit={(sill) => run('调整洞口', [{ type: 'setOpening', id: o.id, sill }])} />
           )}
         </div>
+        {o.kind === 'sliding' && (
+          <div className="space-y-1.5 border-t border-zinc-100 pt-3">
+            <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
+              推拉门方式
+              <select
+                value={o.slideMode ?? 'bypass'}
+                onChange={(event) => run('设置推拉门方式', [{
+                  type: 'setOpening', id: o.id, slideMode: event.target.value as NonNullable<Opening['slideMode']>,
+                }])}
+                className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              >
+                <option value="bypass">双轨错位（洞口内）</option>
+                <option value="pocket-start">单侧墙体收纳（{horizontal ? '左侧' : '上侧'}）</option>
+                <option value="pocket-end">单侧墙体收纳（{horizontal ? '右侧' : '下侧'}）</option>
+              </select>
+            </label>
+            <p className="text-[10px] leading-relaxed text-zinc-400">截图识别不会推断墙体收纳方向；只在明确选择单侧收纳时检查墙体空间。</p>
+          </div>
+        )}
         <p className="text-[11px] text-zinc-400">提示：拖动墙体时，墙上的门窗会跟随移动；Delete 删除。</p>
         <button
           className="w-full rounded-md border border-red-200 py-1.5 text-xs text-red-600 hover:bg-red-50"
@@ -335,6 +354,8 @@ export function StatsPanel() {
   const assets = documentAssets(doc);
   const level = doc.levels[0];
   const layoutChecks = analyzeLevelLayout(level, assets);
+  const blockingChecks = layoutChecks.filter((check) => check.severity !== 'review');
+  const reviewChecks = layoutChecks.length - blockingChecks.length;
   const counted = level.rooms.filter((r) => r.counted !== false);
   const totalArea = counted.reduce((a, r) => a + polyArea(r.poly), 0);
 
@@ -356,19 +377,25 @@ export function StatsPanel() {
       <section className="border-b border-zinc-100 pb-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold tracking-wider text-zinc-400">方案检查</h3>
-          <span className={`text-[11px] font-medium ${layoutChecks.length ? 'text-red-700' : 'text-emerald-700'}`}>
-            {layoutChecks.length ? `${layoutChecks.length} 项需处理` : '方案检查通过'}
-          </span>
+          <div className="flex flex-col items-end text-right text-[11px] font-medium leading-4">
+            {blockingChecks.length > 0 && <span className="text-red-700">不满足 · {blockingChecks.length} 项需处理</span>}
+            {reviewChecks > 0 && <span className="text-amber-700">需确认 · {reviewChecks} 项</span>}
+            {!blockingChecks.length && !reviewChecks && <span className="text-emerald-700">通过</span>}
+          </div>
         </div>
         {layoutChecks.length > 0 && (
           <ul className="mt-2 space-y-1.5">
             {layoutChecks.slice(0, 8).map((check, index) => {
               const instance = level.instances.find((item) => item.id === check.instanceId);
               const related = level.instances.find((item) => item.id === check.relatedInstanceId);
-              const name = instance ? assetById(instance.assetId, assets)?.name ?? '家具' : '家具';
+              const opening = level.openings.find((item) => item.id === check.openingId);
+              const openingName = opening?.kind === 'entry' ? '入户门'
+                : opening?.kind === 'sliding' ? '推拉门'
+                  : opening ? '房门' : undefined;
+              const name = instance ? assetById(instance.assetId, assets)?.name ?? '家具' : openingName ?? '家具';
               const relatedName = related ? assetById(related.assetId, assets)?.name : undefined;
               return (
-                <li key={`${check.instanceId}-${check.code}-${check.relatedInstanceId ?? index}`} className="text-[11px] leading-relaxed text-red-800">
+                <li key={`${check.instanceId ?? check.openingId ?? 'layout'}-${check.code}-${check.relatedInstanceId ?? index}`} className={`text-[11px] leading-relaxed ${check.severity === 'review' ? 'text-amber-800' : 'text-red-800'}`}>
                   {name}：{check.message}{relatedName ? `（与${relatedName}）` : ''}
                 </li>
               );
@@ -377,7 +404,7 @@ export function StatsPanel() {
           </ul>
         )}
         {!level.rooms.length && <p className="mt-2 text-[11px] leading-relaxed text-amber-800">尚未绘制房间边界，无法验证家具是否超出房间。</p>}
-        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">已检查房间边界、家具重叠和平开门开启范围；下水、电位、柜门净空及现场运输条件尚未验证。</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">已检查房间边界、家具重叠和门洞；门前通行带、用户指定一侧的推拉门收纳区及家具操作净距按当前模型给出参考提示。全屋连续动线、商品实际轨道/开门角度、下水、电位及现场运输条件尚未验证。</p>
       </section>
 
       <section>

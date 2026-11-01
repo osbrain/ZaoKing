@@ -56,7 +56,11 @@ const openingSchema = z.object({
   closeDir: vec2Schema.optional(),
   span: positiveMeasure.optional(),
   vertical: z.boolean().optional(),
+  slideMode: z.enum(['bypass', 'pocket-start', 'pocket-end']).optional(),
 }).strict().superRefine((opening, ctx) => {
+  if (opening.kind !== 'sliding' && opening.slideMode !== undefined) {
+    ctx.addIssue({ path: ['slideMode'], code: z.ZodIssueCode.custom, message: 'Sliding-door mode is only valid for sliding openings' });
+  }
   if (opening.kind === 'door' || opening.kind === 'entry') {
     for (const field of ['hinge', 'openDir', 'closeDir', 'span'] as const) {
       if (opening[field] === undefined) {

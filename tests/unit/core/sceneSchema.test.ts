@@ -8,6 +8,25 @@ describe('SceneDocumentSchema', () => {
     expect(SceneDocumentSchema.safeParse(buildSeedDocument()).success).toBe(true);
   });
 
+  it('accepts legacy sliding openings and explicit pocket-door modes', () => {
+    const document = buildBlankDocument();
+    document.levels[0].openings = [{ id: 'slider', kind: 'sliding', rect: [100, 100, 1200, 300], height: 2400, sill: 0 }];
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+
+    document.levels[0].openings[0].slideMode = 'pocket-start';
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+  });
+
+  it('rejects sliding-door modes on non-sliding openings', () => {
+    const document = buildBlankDocument();
+    document.levels[0].openings = [{
+      id: 'window-1', kind: 'window', rect: [100, 100, 1200, 300], height: 1500, sill: 900,
+      slideMode: 'pocket-start',
+    }];
+
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+  });
+
   it('rejects inverted wall bounds', () => {
     const document = buildBlankDocument();
     document.levels[0].walls.push({

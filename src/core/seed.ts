@@ -204,7 +204,7 @@ export function buildSeedDocument(projectName = '三室两厅两卫 · 示例方
       hinge: d.h, closeDir: d.c, openDir: d.o, span: d.len,
     })),
     ...RAW_SLIDES.map((s, i) => ({
-      id: `slide${i}`, kind: 'sliding' as const, rect: s.rect, height: 2400, sill: 0, vertical: s.v,
+      id: `slide${i}`, kind: 'sliding' as const, rect: s.rect, height: 2400, sill: 0, vertical: s.v, slideMode: 'bypass' as const,
     })),
   ];
 

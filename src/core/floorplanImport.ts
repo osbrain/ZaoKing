@@ -356,7 +356,10 @@ export function draftToDocument(draft: FloorPlanDraft, projectName: string): { d
       item.openDir = o.openDir ?? (horizontal ? [-1, 0] : [0, -1]);
       item.span = horizontal ? rect[2] - rect[0] : rect[3] - rect[1];
     }
-    if (o.kind === 'sliding') item.vertical = !horizontal;
+    if (o.kind === 'sliding') {
+      item.vertical = !horizontal;
+      item.slideMode = 'bypass';
+    }
     openings.push(item);
   }
 

@@ -50,6 +50,8 @@ export interface Opening {
   span?: number;
   // 推拉门方向
   vertical?: boolean;
+  /** bypass keeps leaves inside the opening; pocket modes store leaves beyond one opening end. */
+  slideMode?: 'bypass' | 'pocket-start' | 'pocket-end';
 }
 
 /** 组件实例（放置在户型上的家具）：只存变换与覆盖项 */

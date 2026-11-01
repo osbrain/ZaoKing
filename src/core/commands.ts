@@ -28,7 +28,7 @@ type LevelCmd =
   /* ---- 户型编辑：门窗 ---- */
   | { levelId?: string; type: 'addOpening'; opening: Opening }
   | { levelId?: string; type: 'deleteOpening'; id: string }
-  | { levelId?: string; type: 'setOpening'; id: string; rect?: [number, number, number, number]; height?: number; sill?: number };
+  | { levelId?: string; type: 'setOpening'; id: string; rect?: [number, number, number, number]; height?: number; sill?: number; slideMode?: Opening['slideMode'] };
 
 type AssetCmd = (
   | { type: 'addAsset'; asset: CustomAsset }
@@ -164,6 +164,7 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
             if (c.rect) o.rect = [...c.rect];
             if (c.height !== undefined) o.height = c.height;
             if (c.sill !== undefined) o.sill = c.sill;
+            if (c.slideMode !== undefined) o.slideMode = c.slideMode;
           }
           break;
         }
