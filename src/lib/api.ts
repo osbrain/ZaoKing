@@ -133,11 +133,26 @@ export async function askAi(
   doc: SceneDocument,
   history: ChatMsg[],
 ): Promise<{ reply: string; ops: unknown[]; mode: 'llm' | 'rules' }> {
+  const historyPayload = history.slice(-16).map(({ role, content }) => ({
+    role,
+    content: content.slice(0, 10000),
+  }));
   const res = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, doc, history }),
+    body: JSON.stringify({ message, doc, history: historyPayload }),
   });
-  if (!res.ok) throw new Error('AI 服务暂时不可用');
-  return res.json();
+  const payload = await res.json().catch(() => null) as {
+    reply?: string;
+    ops?: unknown[];
+    mode?: 'llm' | 'rules';
+    error?: string;
+    issues?: Array<{ path: string; message: string }>;
+  } | null;
+  if (!res.ok) {
+    const details = payload?.issues?.map((issue) => `${issue.path}: ${issue.message}`).join('；');
+    throw new Error(details ? `${payload?.error ?? 'AI 请求无效'}：${details}` : payload?.error ?? 'AI 服务暂时不可用');
+  }
+  if (!payload?.reply || !Array.isArray(payload.ops) || !payload.mode) throw new Error('AI 服务返回了无效响应');
+  return payload as { reply: string; ops: unknown[]; mode: 'llm' | 'rules' };
 }

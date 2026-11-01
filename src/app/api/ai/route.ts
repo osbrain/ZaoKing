@@ -352,8 +352,8 @@ export async function POST(req: NextRequest) {
       doc: SceneDocumentSchema,
       history: z.array(z.object({
         role: z.enum(['user', 'assistant']),
-        content: z.string().max(2000),
-      }).strict()).max(16).optional(),
+        content: z.string().max(10000),
+      }).strip()).max(16).optional(),
     }).strict();
     const request = requestSchema.safeParse(await req.json());
     if (!request.success) {
