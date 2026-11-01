@@ -67,4 +67,34 @@ describe('shared layout constraints', () => {
 
     expect(validateComponentPlacement(level, instance, [sofa]).issues[0].code).toBe('outside-room');
   });
+
+  it('rejects furniture that occupies a hinged door swing area', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.openings.push({
+      id: 'living-door', kind: 'door', rect: [1400, 1400, 1600, 2300], height: 2100, sill: 0,
+      hinge: [1500, 1500], openDir: [1, 0], closeDir: [0, 1], span: 900,
+    });
+    const instance = { id: 'sofa', assetId: sofa.id, t: { x: 1900, y: 1900, rot: 0 }, size: { w: 300, d: 300 } };
+    level.instances = [instance];
+
+    expect(validateComponentPlacement(level, instance, [sofa]).issues.map((issue) => issue.code)).toContain('door-swing');
+    expect(analyzeLevelLayout(level, [sofa])).toContainEqual(expect.objectContaining({
+      code: 'door-swing', instanceId: 'sofa', message: '与房门开启范围重叠，建议核对门向或移动家具',
+    }));
+  });
+
+  it('does not treat sliding doors or furniture outside the swing arc as hinged-door conflicts', () => {
+    const doc = buildBlankDocument();
+    const level = doc.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [5000, 0], [5000, 5000], [0, 5000]], floorMaterialId: 'wood' });
+    level.openings.push({ id: 'slider', kind: 'sliding', rect: [1400, 1400, 1600, 2300], height: 2400, sill: 0 });
+    const instance = { id: 'sofa', assetId: sofa.id, t: { x: 2600, y: 1500, rot: 0 }, size: { w: 300, d: 300 } };
+
+    expect(validateComponentPlacement(level, instance, [sofa]).valid).toBe(true);
+    expect(analyzeLevelLayout(level, [sofa])).toEqual([]);
+  });
 });

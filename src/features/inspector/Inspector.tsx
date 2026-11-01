@@ -357,7 +357,7 @@ export function StatsPanel() {
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-xs font-semibold tracking-wider text-zinc-400">方案检查</h3>
           <span className={`text-[11px] font-medium ${layoutChecks.length ? 'text-red-700' : 'text-emerald-700'}`}>
-            {layoutChecks.length ? `${layoutChecks.length} 项需处理` : '家具布局通过'}
+            {layoutChecks.length ? `${layoutChecks.length} 项需处理` : '方案检查通过'}
           </span>
         </div>
         {layoutChecks.length > 0 && (
@@ -377,7 +377,7 @@ export function StatsPanel() {
           </ul>
         )}
         {!level.rooms.length && <p className="mt-2 text-[11px] leading-relaxed text-amber-800">尚未绘制房间边界，无法验证家具是否超出房间。</p>}
-        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">仅检查家具与房间轮廓的平面关系；下水、电位、门扇净空及现场运输条件尚未验证。</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">已检查房间边界、家具重叠和平开门开启范围；下水、电位、柜门净空及现场运输条件尚未验证。</p>
       </section>
 
       <section>

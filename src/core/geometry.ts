@@ -3,7 +3,7 @@
  * AI 与人工放置共用同一套确定性求解逻辑。
  * ============================================================ */
 
-import type { Asset, ComponentInstance, Level, Room, Vec2 } from './types';
+import type { Asset, ComponentInstance, Level, Opening, Room, Vec2 } from './types';
 import { instanceRef } from './types';
 import { assetById } from './assets';
 
@@ -187,6 +187,34 @@ export function orientedRectanglesOverlap(a: readonly Vec2[], b: readonly Vec2[]
   return true;
 }
 
+/** Convex plan polygon for the area swept by a hinged door leaf. */
+export function doorSwingPolygon(opening: Opening): Vec2[] | null {
+  if ((opening.kind !== 'door' && opening.kind !== 'entry') || !opening.hinge
+    || !opening.openDir || !opening.closeDir || !Number.isFinite(opening.span) || opening.span! <= 0) return null;
+
+  const openLength = Math.hypot(...opening.openDir);
+  const closeLength = Math.hypot(...opening.closeDir);
+  if (openLength < 1e-6 || closeLength < 1e-6) return null;
+
+  const openDir: Vec2 = [opening.openDir[0] / openLength, opening.openDir[1] / openLength];
+  const closeDir: Vec2 = [opening.closeDir[0] / closeLength, opening.closeDir[1] / closeLength];
+  const cross = openDir[0] * closeDir[1] - openDir[1] * closeDir[0];
+  const dot = openDir[0] * closeDir[0] + openDir[1] * closeDir[1];
+  const sweep = Math.atan2(cross, dot);
+  if (Math.abs(sweep) < Math.PI / 6 || Math.abs(sweep) > Math.PI * 5 / 6) return null;
+
+  const start = Math.atan2(openDir[1], openDir[0]);
+  const segments = Math.max(4, Math.ceil(Math.abs(sweep) / (Math.PI / 18)));
+  const arc = Array.from({ length: segments + 1 }, (_, index): Vec2 => {
+    const angle = start + sweep * index / segments;
+    return [
+      opening.hinge![0] + Math.cos(angle) * opening.span!,
+      opening.hinge![1] + Math.sin(angle) * opening.span!,
+    ];
+  });
+  return [opening.hinge, ...arc];
+}
+
 function allowsIntentionalFootprintOverlap(a: Asset | undefined, b: Asset | undefined) {
   if (a?.type === 'rug' || b?.type === 'rug') return true;
 
@@ -197,7 +225,7 @@ function allowsIntentionalFootprintOverlap(a: Asset | undefined, b: Asset | unde
 }
 
 export interface PlacementIssue {
-  code: 'no-room' | 'outside-room' | 'overlap';
+  code: 'no-room' | 'outside-room' | 'overlap' | 'door-swing';
   message: string;
   relatedInstanceId?: string;
 }
@@ -225,6 +253,17 @@ export function validateComponentPlacement(
     issues.push({ code: 'no-room', message: '家具越界：中心不在任何已绘制房间内' });
   } else if (room && !rectangleInsidePolygon(corners, room.poly)) {
     issues.push({ code: 'outside-room', message: `家具越界：超出「${room.name}」边界` });
+  }
+
+  const obstructedDoor = level.openings.find((opening) => {
+    const swing = doorSwingPolygon(opening);
+    return Boolean(swing && orientedRectanglesOverlap(corners, swing));
+  });
+  if (obstructedDoor) {
+    issues.push({
+      code: 'door-swing',
+      message: `与${obstructedDoor.kind === 'entry' ? '入户门' : '房门'}开启范围重叠，建议核对门向或移动家具`,
+    });
   }
 
   if (options.checkCollisions !== false) {
