@@ -46,6 +46,12 @@ describe('level-aware design operations', () => {
     expect(outcome.cmds).toEqual([{ levelId: 'lv1', type: 'resize', id: 'sofa-1', size: { w: 2200 } }]);
   });
 
+  it('creates a height edit for an exact component instance', () => {
+    const document = sofaDocument();
+    const outcome = executeOps(document, [{ op: 'resize_component', instanceId: 'sofa-1', heightMm: 950 }]);
+    expect(outcome.cmds).toEqual([{ levelId: 'lv1', type: 'resize', id: 'sofa-1', size: { h: 950 } }]);
+  });
+
   it('allows furniture dimensions to change while it overlaps a floor rug', () => {
     const document = sofaDocument();
     const level = document.levels[0];

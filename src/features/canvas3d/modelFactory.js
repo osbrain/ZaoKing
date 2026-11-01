@@ -910,7 +910,18 @@ function buildFurniture(f){
     }
     default: g.add(box(w, .8, d, c));
   }
-  g.position.set(wx(f.cx), 0, wz(f.cy));
+  const requestedHeight = Number(f.h);
+  let verticalOffset = 0;
+  if (Number.isFinite(requestedHeight) && requestedHeight > 0) {
+    const bounds = new THREE.Box3().setFromObject(g);
+    const modelHeight = bounds.getSize(new THREE.Vector3()).y;
+    if (modelHeight > 1e-6) {
+      const heightScale = M(requestedHeight) / modelHeight;
+      g.scale.y *= heightScale;
+      verticalOffset = -bounds.min.y * heightScale;
+    }
+  }
+  g.position.set(wx(f.cx), verticalOffset, wz(f.cy));
   g.rotation.y = -f.rot * Math.PI/180;       // 平面顺时针旋转 → 绕 Y 轴负向
   g.userData.fid = f.id;
   return g;

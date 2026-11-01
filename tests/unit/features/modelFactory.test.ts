@@ -34,6 +34,24 @@ describe('3D furniture model factory', () => {
     environment.dispose();
   });
 
+  it('applies a per-instance height override to built-in furniture geometry', () => {
+    const definition = assetById('a0_0');
+    expect(definition).toBeDefined();
+    if (!definition) return;
+
+    const environment = new THREE.Texture();
+    const factory = createModelFactory(environment);
+    const object = factory.buildFurniture({ ...definition, h: 650, cx: 0, cy: 0, rot: 0 });
+    const bounds = new THREE.Box3().setFromObject(object);
+
+    expect(bounds.getSize(new THREE.Vector3()).y).toBeCloseTo(0.65, 4);
+    expect(bounds.min.y).toBeCloseTo(0, 4);
+
+    disposeModelGeometry(object);
+    factory.dispose();
+    environment.dispose();
+  });
+
   it.each(['box', 'cylinder'] as const)('matches asset dimensions for a custom %s', (shape) => {
     const environment = new THREE.Texture();
     const factory = createModelFactory(environment);

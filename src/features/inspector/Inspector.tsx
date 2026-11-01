@@ -87,14 +87,12 @@ export function PropsPanel() {
           <NumberField label="Y (mm)" value={inst.t.y} onCommit={(y) => run('移动家具', [{ type: 'move', id: inst.id, t: { ...inst.t, y } }])} />
           <NumberField label="角度 (°)" value={inst.t.rot} onCommit={(rot) => run('旋转家具', [{ type: 'move', id: inst.id, t: { ...inst.t, rot: ((rot % 360) + 360) % 360 } }])} />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <NumberField min={10} max={20000} label="宽 (mm)" value={ref.w} onCommit={(w) => run('调整尺寸', [{ levelId: level.id, type: 'resize', id: inst.id, size: { w } }])} />
           <NumberField min={10} max={20000} label="深 (mm)" value={ref.d} onCommit={(d) => run('调整尺寸', [{ levelId: level.id, type: 'resize', id: inst.id, size: { d } }])} />
-        </div>
-        {asset?.type === 'custom' && (
           <NumberField min={10} max={20000} label="高 (mm)" value={ref.h}
             onCommit={(h) => run('调整高度', [{ levelId: level.id, type: 'resize', id: inst.id, size: { h } }])} />
-        )}
+        </div>
         {asset?.type === 'custom' && customParameters && Object.keys(customParameters).length > 0 && (
           <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3">
             {([
