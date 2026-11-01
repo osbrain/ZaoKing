@@ -74,6 +74,61 @@ export function pointInPoly(pt: Vec2, poly: Vec2[]): boolean {
   return inside;
 }
 
+function pointOnPolygonEdge(point: Vec2, polygon: readonly Vec2[], epsilon = 1) {
+  for (let index = 0; index < polygon.length; index++) {
+    const a = polygon[index];
+    const b = polygon[(index + 1) % polygon.length];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const lengthSquared = dx * dx + dy * dy;
+    if (!lengthSquared) continue;
+    const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / lengthSquared));
+    if (Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dy)) <= epsilon) return true;
+  }
+  return false;
+}
+
+export function pointInPolyInclusive(point: Vec2, polygon: readonly Vec2[]) {
+  return pointInPoly(point, [...polygon]) || pointOnPolygonEdge(point, polygon);
+}
+
+function pointStrictlyInConvexPolygon(point: Vec2, polygon: readonly Vec2[]) {
+  let positive = false;
+  let negative = false;
+  for (let index = 0; index < polygon.length; index++) {
+    const a = polygon[index];
+    const b = polygon[(index + 1) % polygon.length];
+    const side = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (point[0] - a[0]);
+    if (Math.abs(side) <= 1) return false;
+    if (side > 0) positive = true;
+    else negative = true;
+    if (positive && negative) return false;
+  }
+  return true;
+}
+
+function segmentsProperlyCross(a: Vec2, b: Vec2, c: Vec2, d: Vec2) {
+  const abC = cross(a, b, c);
+  const abD = cross(a, b, d);
+  const cdA = cross(c, d, a);
+  const cdB = cross(c, d, b);
+  return ((abC > 1 && abD < -1) || (abC < -1 && abD > 1))
+    && ((cdA > 1 && cdB < -1) || (cdA < -1 && cdB > 1));
+}
+
+function rectangleInsidePolygon(rectangle: readonly Vec2[], polygon: readonly Vec2[]) {
+  if (!rectangle.every((corner) => pointInPolyInclusive(corner, polygon))) return false;
+  for (let index = 0; index < polygon.length; index++) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    if (pointStrictlyInConvexPolygon(start, rectangle)) return false;
+    for (let edge = 0; edge < rectangle.length; edge++) {
+      if (segmentsProperlyCross(start, end, rectangle[edge], rectangle[(edge + 1) % rectangle.length])) return false;
+    }
+  }
+  return true;
+}
+
 export const roomOfPoint = (level: Level, p: Vec2): Room | undefined =>
   level.rooms.find((r) => pointInPoly(p, r.poly));
 
@@ -95,6 +150,137 @@ export function aabbOverlap(
     Math.abs(a.x - b.x) < a.hw + b.hw + margin &&
     Math.abs(a.y - b.y) < a.hh + b.hh + margin
   );
+}
+
+export function orientedRectCorners(inst: ComponentInstance, assets: readonly Asset[] = []): Vec2[] {
+  const { w, d } = instanceRef(inst, assetById(inst.assetId, assets));
+  const angle = (inst.t.rot * Math.PI) / 180;
+  const widthAxis: Vec2 = [Math.cos(angle), Math.sin(angle)];
+  const depthAxis: Vec2 = [-Math.sin(angle), Math.cos(angle)];
+  const point = (wSign: number, dSign: number): Vec2 => [
+    inst.t.x + widthAxis[0] * wSign * w / 2 + depthAxis[0] * dSign * d / 2,
+    inst.t.y + widthAxis[1] * wSign * w / 2 + depthAxis[1] * dSign * d / 2,
+  ];
+  return [point(-1, -1), point(1, -1), point(1, 1), point(-1, 1)];
+}
+
+function projectionRange(points: readonly Vec2[], axis: Vec2): [number, number] {
+  const projections = points.map(([x, y]) => x * axis[0] + y * axis[1]);
+  return [Math.min(...projections), Math.max(...projections)];
+}
+
+export function orientedRectanglesOverlap(a: readonly Vec2[], b: readonly Vec2[], epsilon = 1): boolean {
+  for (const polygon of [a, b]) {
+    for (let index = 0; index < polygon.length; index++) {
+      const start = polygon[index];
+      const end = polygon[(index + 1) % polygon.length];
+      const dx = end[0] - start[0];
+      const dy = end[1] - start[1];
+      const length = Math.hypot(dx, dy);
+      if (length <= epsilon) continue;
+      const axis: Vec2 = [-dy / length, dx / length];
+      const [aMin, aMax] = projectionRange(a, axis);
+      const [bMin, bMax] = projectionRange(b, axis);
+      if (aMax <= bMin + epsilon || bMax <= aMin + epsilon) return false;
+    }
+  }
+  return true;
+}
+
+function allowsIntentionalFootprintOverlap(a: Asset | undefined, b: Asset | undefined) {
+  if (a?.type === 'rug' || b?.type === 'rug') return true;
+
+  const aIsSurface = a?.type === 'counter' || a?.type === 'island';
+  const bIsSurface = b?.type === 'counter' || b?.type === 'island';
+  const fixture = aIsSurface ? b : bIsSurface ? a : undefined;
+  return Boolean((aIsSurface || bIsSurface) && fixture && ['stove', 'ksink'].includes(fixture.type));
+}
+
+export interface PlacementIssue {
+  code: 'no-room' | 'outside-room' | 'overlap';
+  message: string;
+  relatedInstanceId?: string;
+}
+
+export interface PlacementValidation {
+  valid: boolean;
+  room?: Room;
+  issues: PlacementIssue[];
+}
+
+export function validateComponentPlacement(
+  level: Level,
+  instance: ComponentInstance,
+  assets: readonly Asset[] = [],
+  options: { roomId?: string; checkCollisions?: boolean } = {},
+): PlacementValidation {
+  const issues: PlacementIssue[] = [];
+  const corners = orientedRectCorners(instance, assets);
+  const center: Vec2 = [instance.t.x, instance.t.y];
+  const room = options.roomId
+    ? level.rooms.find((candidate) => candidate.id === options.roomId)
+    : level.rooms.find((candidate) => pointInPolyInclusive(center, candidate.poly));
+
+  if (level.rooms.length && !room) {
+    issues.push({ code: 'no-room', message: '家具越界：中心不在任何已绘制房间内' });
+  } else if (room && !rectangleInsidePolygon(corners, room.poly)) {
+    issues.push({ code: 'outside-room', message: `家具越界：超出「${room.name}」边界` });
+  }
+
+  if (options.checkCollisions !== false) {
+    const asset = assetById(instance.assetId, assets);
+    const bounds = polyBBox(corners);
+    const overlap = level.instances.find((other) => {
+      const otherAsset = assetById(other.assetId, assets);
+      if (other.id === instance.id || allowsIntentionalFootprintOverlap(asset, otherAsset)) return false;
+      const otherCorners = orientedRectCorners(other, assets);
+      const otherBounds = polyBBox(otherCorners);
+      if (bounds.x1 <= otherBounds.x0 + 1 || otherBounds.x1 <= bounds.x0 + 1
+        || bounds.y1 <= otherBounds.y0 + 1 || otherBounds.y1 <= bounds.y0 + 1) return false;
+      return orientedRectanglesOverlap(corners, otherCorners);
+    });
+    if (overlap) {
+      issues.push({ code: 'overlap', message: '家具与其他组件重叠', relatedInstanceId: overlap.id });
+    }
+  }
+
+  return { valid: issues.length === 0, room, issues };
+}
+
+export interface LayoutCheck {
+  code: PlacementIssue['code'];
+  message: string;
+  instanceId: string;
+  relatedInstanceId?: string;
+}
+
+export function analyzeLevelLayout(level: Level, assets: readonly Asset[] = []): LayoutCheck[] {
+  const checks: LayoutCheck[] = [];
+  for (const instance of level.instances) {
+    const validation = validateComponentPlacement(level, instance, assets, { checkCollisions: false });
+    for (const issue of validation.issues) {
+      checks.push({ code: issue.code, message: issue.message, instanceId: instance.id, relatedInstanceId: issue.relatedInstanceId });
+    }
+  }
+
+  const shapes = level.instances
+    .filter((instance) => assetById(instance.assetId, assets)?.type !== 'rug')
+    .map((instance) => {
+      const corners = orientedRectCorners(instance, assets);
+      return { instance, corners, bounds: polyBBox(corners) };
+    })
+    .sort((a, b) => a.bounds.x0 - b.bounds.x0);
+  for (let index = 0; index < shapes.length; index++) {
+    const current = shapes[index];
+    for (let next = index + 1; next < shapes.length && shapes[next].bounds.x0 < current.bounds.x1 - 1; next++) {
+      const candidate = shapes[next];
+      if (candidate.bounds.y0 >= current.bounds.y1 - 1 || current.bounds.y0 >= candidate.bounds.y1 - 1) continue;
+      if (allowsIntentionalFootprintOverlap(assetById(current.instance.assetId, assets), assetById(candidate.instance.assetId, assets))) continue;
+      if (!orientedRectanglesOverlap(current.corners, candidate.corners)) continue;
+      checks.push({ code: 'overlap', message: '家具与其他组件重叠', instanceId: current.instance.id, relatedInstanceId: candidate.instance.id });
+    }
+  }
+  return checks;
 }
 
 /* ---------- 房间边缘（视作墙） ---------- */
@@ -163,12 +349,6 @@ export function solvePlacement(
 ): Placement | null {
   const { clearance = 100, wallGap = 50, step = 100 } = opts;
   const { w, d } = asset;
-  const obstacles = level.instances
-    .map((inst) => {
-      const { hw, hh } = instAABB(inst, opts.assets);
-      return { x: inst.t.x, y: inst.t.y, hw, hh };
-    });
-
   const edges = roomEdges(room).sort((e1, e2) => e2.len - e1.len);
   for (const e of edges) {
     const horizontal = Math.abs(e.b[0] - e.a[0]) >= Math.abs(e.b[1] - e.a[1]);
@@ -185,8 +365,13 @@ export function solvePlacement(
       const py = e.a[1] + ((e.b[1] - e.a[1]) * t) / e.len + e.ny * (gap + hh);
       const cand = { x: Math.round(px), y: Math.round(py) };
       if (!pointInPoly([cand.x, cand.y], room.poly)) continue;
-      const me = { x: cand.x, y: cand.y, hw, hh };
-      if (obstacles.some((o) => aabbOverlap(me, o, clearance))) continue;
+      const candidate: ComponentInstance = { id: '__placement_candidate__', assetId: asset.id, t: { ...cand, rot } };
+      if (!validateComponentPlacement(level, candidate, opts.assets, { roomId: room.id }).valid) continue;
+      if (clearance > 0 && level.instances.some((other) => {
+        if (assetById(other.assetId, opts.assets)?.type === 'rug') return false;
+        const box = instAABB(other, opts.assets);
+        return aabbOverlap({ x: cand.x, y: cand.y, hw, hh }, { x: other.t.x, y: other.t.y, hw: box.hw, hh: box.hh }, clearance);
+      })) continue;
       return { ...cand, rot };
     }
   }
@@ -197,7 +382,13 @@ export function solvePlacement(
     for (let x = bb.x0 + 300; x <= bb.x1 - 300; x += 300) {
       if (!pointInPoly([x, y], room.poly)) continue;
       const me = { x, y, hw: w / 2, hh: d / 2 };
-      if (obstacles.some((o) => aabbOverlap(me, o, clearance))) continue;
+      const candidate: ComponentInstance = { id: '__placement_candidate__', assetId: asset.id, t: { x, y, rot: 0 } };
+      if (!validateComponentPlacement(level, candidate, opts.assets, { roomId: room.id }).valid) continue;
+      if (clearance > 0 && level.instances.some((other) => {
+        if (assetById(other.assetId, opts.assets)?.type === 'rug') return false;
+        const box = instAABB(other, opts.assets);
+        return aabbOverlap(me, { x: other.t.x, y: other.t.y, hw: box.hw, hh: box.hh }, clearance);
+      })) continue;
       return { x: Math.round(x), y: Math.round(y), rot: 0 };
     }
   }

@@ -15,7 +15,7 @@ import {
   resolveAssetByQuery,
   resolveMaterialByQuery,
 } from './assets';
-import { aabbOverlap, instAABB, pointInPoly, polyArea, solvePlacement } from './geometry';
+import { pointInPoly, polyArea, solvePlacement, validateComponentPlacement } from './geometry';
 import { documentAssets, documentMaterials } from './sceneResources';
 
 export type DesignOp =
@@ -107,29 +107,9 @@ function targetForOp(level: Level, op: { room?: string; target?: string; instanc
   return { instance: matches[0] };
 }
 
-function fitsWithoutCollision(level: Level, inst: ComponentInstance, assets: readonly Asset[]) {
-  const asset = assetById(inst.assetId, assets);
-  const original = level.instances.find((candidate) => candidate.id === inst.id);
-  const room = level.rooms.find((candidate) => pointInPoly(
-    [original?.t.x ?? inst.t.x, original?.t.y ?? inst.t.y], candidate.poly,
-  ));
-  if (room) {
-    const { hw, hh } = instAABB(inst, assets);
-    const corners: Array<[number, number]> = [
-      [inst.t.x - hw, inst.t.y - hh], [inst.t.x + hw, inst.t.y - hh],
-      [inst.t.x + hw, inst.t.y + hh], [inst.t.x - hw, inst.t.y + hh],
-    ];
-    if (!corners.every((corner) => pointInPoly(corner, room.poly))) return false;
-  }
-  const { hw, hh } = instAABB(inst, assets);
-  return !level.instances.some((other) => {
-    if (other.id === inst.id) return false;
-    // Rugs are floor coverings; furniture is expected to sit on top of them.
-    // They should not block furniture placement, movement, replacement, or resizing.
-    if (asset?.type === 'rug' || assetById(other.assetId, assets)?.type === 'rug') return false;
-    const box = instAABB(other, assets);
-    return aabbOverlap({ x: inst.t.x, y: inst.t.y, hw, hh }, { x: other.t.x, y: other.t.y, hw: box.hw, hh: box.hh });
-  });
+function placementFailure(level: Level, instance: ComponentInstance, assets: readonly Asset[]) {
+  const validation = validateComponentPlacement(level, instance, assets);
+  return validation.valid ? null : validation.issues.map((issue) => issue.message).join('；');
 }
 
 function wallTouchesRoom(wall: Level['walls'][number], room: Room) {
@@ -203,7 +183,8 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         }
         if (!next || next.id === cur.id) { log.push(`⚠ 没有满足「${op.spec ?? op.target}」的替换规格`); break; }
         const candidate = { ...inst, assetId: next.id, size: undefined, color: undefined };
-        if (!fitsWithoutCollision(level, candidate, assets)) { log.push(`⚠ 替换后的「${next.name}」会越界或与其他组件重叠`); break; }
+        const placementError = placementFailure(level, candidate, assets);
+        if (placementError) { log.push(`⚠ 替换后的「${next.name}」${placementError}`); break; }
         cmds.push({ levelId: level.id, type: 'replaceAsset', id: inst.id, assetId: next.id });
         log.push(`✓ 已将「${cur.name}」换成「${next.name}」（位置朝向保留）`);
         break;
@@ -227,7 +208,8 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         }
         const t = { x: Math.round(inst.t.x + deltaX), y: Math.round(inst.t.y + deltaY), rot: ((inst.t.rot + rotation) % 360 + 360) % 360 };
         const candidate = { ...inst, t };
-        if (!fitsWithoutCollision(level, candidate, assets)) { log.push('⚠ 移动后会越界或与其他组件重叠'); break; }
+        const placementError = placementFailure(level, candidate, assets);
+        if (placementError) { log.push(`⚠ 移动后无法放置：${placementError}`); break; }
         cmds.push({ levelId: level.id, type: 'move', id: inst.id, t });
         log.push(`✓ 已移动「${assetById(inst.assetId, assets)?.name ?? '组件'}」`);
         break;
@@ -241,7 +223,8 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
           log.push('⚠ 尺寸必须在 10 到 20000 mm 之间'); break;
         }
         const candidate = { ...inst, size: { ...inst.size, ...updates } };
-        if (!fitsWithoutCollision(level, candidate, assets)) { log.push('⚠ 调整尺寸后会越界或与其他组件重叠'); break; }
+        const placementError = placementFailure(level, candidate, assets);
+        if (placementError) { log.push(`⚠ 调整尺寸后无法放置：${placementError}`); break; }
         cmds.push({ levelId: level.id, type: 'resize', id: inst.id, size: updates });
         log.push(`✓ 已调整「${assetById(inst.assetId, assets)?.name ?? '组件'}」尺寸`);
         break;

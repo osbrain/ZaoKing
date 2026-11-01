@@ -7,7 +7,7 @@ import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { assetById, materialById, materialCatalog } from '@/core/assets';
 import { instanceRef, uid, type Wall } from '@/core/types';
-import { polyArea } from '@/core/geometry';
+import { analyzeLevelLayout, polyArea } from '@/core/geometry';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
@@ -334,7 +334,9 @@ export function StatsPanel() {
   const doc = useSceneStore((s) => s.doc);
   if (!doc) return null;
   const materials = materialCatalog(documentMaterials(doc));
+  const assets = documentAssets(doc);
   const level = doc.levels[0];
+  const layoutChecks = analyzeLevelLayout(level, assets);
   const counted = level.rooms.filter((r) => r.counted !== false);
   const totalArea = counted.reduce((a, r) => a + polyArea(r.poly), 0);
 
@@ -353,6 +355,33 @@ export function StatsPanel() {
 
   return (
     <div className="space-y-4 p-4">
+      <section className="border-b border-zinc-100 pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold tracking-wider text-zinc-400">方案检查</h3>
+          <span className={`text-[11px] font-medium ${layoutChecks.length ? 'text-red-700' : 'text-emerald-700'}`}>
+            {layoutChecks.length ? `${layoutChecks.length} 项需处理` : '家具布局通过'}
+          </span>
+        </div>
+        {layoutChecks.length > 0 && (
+          <ul className="mt-2 space-y-1.5">
+            {layoutChecks.slice(0, 8).map((check, index) => {
+              const instance = level.instances.find((item) => item.id === check.instanceId);
+              const related = level.instances.find((item) => item.id === check.relatedInstanceId);
+              const name = instance ? assetById(instance.assetId, assets)?.name ?? '家具' : '家具';
+              const relatedName = related ? assetById(related.assetId, assets)?.name : undefined;
+              return (
+                <li key={`${check.instanceId}-${check.code}-${check.relatedInstanceId ?? index}`} className="text-[11px] leading-relaxed text-red-800">
+                  {name}：{check.message}{relatedName ? `（与${relatedName}）` : ''}
+                </li>
+              );
+            })}
+            {layoutChecks.length > 8 && <li className="text-[10px] text-zinc-500">另有 {layoutChecks.length - 8} 项未显示</li>}
+          </ul>
+        )}
+        {!level.rooms.length && <p className="mt-2 text-[11px] leading-relaxed text-amber-800">尚未绘制房间边界，无法验证家具是否超出房间。</p>}
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">仅检查家具与房间轮廓的平面关系；下水、电位、门扇净空及现场运输条件尚未验证。</p>
+      </section>
+
       <section>
         <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-400">房间面积</h3>
         <table className="w-full text-xs">
@@ -373,7 +402,7 @@ export function StatsPanel() {
           <span>套内使用面积</span>
           <span className="tabular-nums">{totalArea.toFixed(2)} m²</span>
         </div>
-        <p className="mt-1 text-[10px] text-zinc-400">* 飘窗不计入；面积按墙体内净尺寸计算</p>
+        <p className="mt-1 text-[10px] text-zinc-400">* 飘窗不计入；按当前房间轮廓估算，不含人工、辅料、运输和安装</p>
       </section>
 
       <section>
@@ -405,6 +434,7 @@ export function StatsPanel() {
           <p className="text-[11px] text-zinc-400">墙段数</p>
         </div>
       </section>
+      <p className="text-[10px] leading-relaxed text-zinc-400">当前组件库未关联真实商品 SKU；此处金额仅为地面材料估算，不含家具商品、人工、辅料、运输及安装。</p>
     </div>
   );
 }

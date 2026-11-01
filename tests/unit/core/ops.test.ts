@@ -74,7 +74,7 @@ describe('level-aware design operations', () => {
     const outcome = executeOps(document, [{ op: 'resize_component', instanceId: 'table-1', widthMm: 1800 }]);
 
     expect(outcome.cmds).toHaveLength(0);
-    expect(outcome.log[0]).toContain('越界或与其他组件重叠');
+    expect(outcome.log[0]).toContain('家具与其他组件重叠');
   });
 
   it('does not silently delete one of several same-name components', () => {

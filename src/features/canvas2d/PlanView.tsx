@@ -11,6 +11,7 @@ import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore, type Selection, type Tool, type WallPreset } from '@/stores/editorStore';
 import type { Cmd } from '@/core/commands';
 import { materialCatalog } from '@/core/assets';
+import { validateComponentPlacement } from '@/core/geometry';
 import { uid, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
 import { dimsSvg, openingsSvg, patternsDefs } from '@/core/symbols2d';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
@@ -106,6 +107,7 @@ export default function PlanView() {
       const t0 = inst.t;
       let cur = { x: t0.x, y: t0.y, rot: t0.rot };
       let moved = false;
+      let failure = '';
       const move = (ev: PointerEvent) => {
         if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 3) return;
         moved = true;
@@ -115,39 +117,48 @@ export default function PlanView() {
           y: Math.round(t0.y + (ev.clientY - sy) / cam.scale),
           rot: t0.rot,
         };
-        setDrag({ id: inst.id, ...cur });
+        const validation = level ? validateComponentPlacement(level, { ...inst, t: cur }, assets) : { valid: true, issues: [] };
+        failure = validation.issues.map((issue) => issue.message).join('；');
+        setDrag({ id: inst.id, ...cur, invalid: !validation.valid });
       };
       const up = () => {
         window.removeEventListener('pointermove', move);
         setDrag(null);
-        if (moved) run('移动家具', [{ type: 'move', id: inst.id, t: cur }]);
+        if (moved && failure) showToast(failure);
+        else if (moved) run('移动家具', [{ type: 'move', id: inst.id, t: cur }]);
       };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up, { once: true });
     },
-    [run, select],
+    [assets, level, run, select, showToast],
   );
 
   const startRotate = useCallback(
     (inst: ComponentInstance, e: React.PointerEvent) => {
       e.stopPropagation();
+      if (inst.locked) return;
       let rot = inst.t.rot;
+      let failure = '';
       const move = (ev: PointerEvent) => {
         const w = toWorld(ev.clientX, ev.clientY);
         const deg = (Math.atan2(w.y - inst.t.y, w.x - inst.t.x) * 180) / Math.PI + 90;
         rot = ev.shiftKey ? deg : Math.round(deg / 15) * 15;
         rot = ((Math.round(rot) % 360) + 360) % 360;
-        setDrag({ id: inst.id, x: inst.t.x, y: inst.t.y, rot });
+        const transform = { x: inst.t.x, y: inst.t.y, rot };
+        const validation = level ? validateComponentPlacement(level, { ...inst, t: transform }, assets) : { valid: true, issues: [] };
+        failure = validation.issues.map((issue) => issue.message).join('；');
+        setDrag({ id: inst.id, ...transform, invalid: !validation.valid });
       };
       const up = () => {
         window.removeEventListener('pointermove', move);
         setDrag(null);
-        run('旋转家具', [{ type: 'move', id: inst.id, t: { x: inst.t.x, y: inst.t.y, rot } }]);
+        if (failure) showToast(failure);
+        else run('旋转家具', [{ type: 'move', id: inst.id, t: { x: inst.t.x, y: inst.t.y, rot } }]);
       };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up, { once: true });
     },
-    [run, toWorld],
+    [assets, level, run, showToast, toWorld],
   );
 
   /* ---------- 选择模式：墙体拖动（墙上门窗跟随） ---------- */

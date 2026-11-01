@@ -256,7 +256,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
               [
                 ['props', '属性'],
                 ['ai', 'AI 助手'],
-                ['stats', '统计'],
+                ['stats', '方案'],
               ] as const
             ).map(([k, label]) => (
               <button
@@ -291,7 +291,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
       <aside className={`fixed bottom-7 right-0 top-12 z-40 flex w-[min(88vw,320px)] flex-col border-l border-zinc-200 bg-white shadow-xl transition-transform md:hidden ${mobilePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex shrink-0 border-b border-zinc-200">
           {([
-            ['props', '属性'], ['ai', 'AI 助手'], ['stats', '统计'],
+            ['props', '属性'], ['ai', 'AI 助手'], ['stats', '方案'],
           ] as const).map(([k, label]) => (
             <button key={k} onClick={() => setRightTab(k)} className={`flex-1 py-2 text-xs font-medium ${rightTab === k ? 'border-b-2 border-accent text-accent' : 'text-zinc-500'}`}>{label}</button>
           ))}

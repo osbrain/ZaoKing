@@ -153,6 +153,9 @@ export const FurnLayer = React.memo(function FurnLayer({
             onPointerDown={interactive ? (event) => onDown(instance, event) : undefined}
           >
             <g dangerouslySetInnerHTML={{ __html: furnSVG(ref.type, ref.w, ref.d, ref.color, geometry) }} />
+            {drag?.id === instance.id && drag.invalid && (
+              <rect x={-ref.w / 2} y={-ref.d / 2} width={ref.w} height={ref.d} fill="rgba(190,45,45,.18)" stroke="#be2d2d" strokeWidth={3} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+            )}
             {Math.min(ref.w, ref.d) >= 380 && !NOLABEL.includes(ref.type) && (
               <text transform={`rotate(${-transform.rot})`} fontSize={Math.max(80, Math.min(170, Math.min(ref.w, ref.d) * 0.2))}
                 textAnchor="middle" dominantBaseline="central" fill="#4a443c" opacity={0.8} pointerEvents="none">{ref.name}</text>
@@ -209,6 +212,7 @@ export const SelLayer = React.memo(function SelLayer({
     const asset = assetById(instance.assetId, assets);
     const ref = instanceRef(instance, asset);
     const transform = drag && drag.id === instance.id ? drag : instance.t;
+    const invalid = drag?.id === instance.id && drag.invalid;
     const padding = 5 / scale;
     const rotateOffset = (26 / scale) * 2;
     const angle = (transform.rot * Math.PI) / 180;
@@ -224,7 +228,7 @@ export const SelLayer = React.memo(function SelLayer({
             width={ref.w + 2 * padding}
             height={ref.d + 2 * padding}
             fill="none"
-            stroke="#b5653a"
+            stroke={invalid ? '#be2d2d' : '#b5653a'}
             strokeWidth={1.5}
             strokeDasharray="5 3"
             vectorEffect="non-scaling-stroke"
@@ -251,12 +255,12 @@ export const SelLayer = React.memo(function SelLayer({
           fontSize={12 / scale}
           textAnchor="middle"
           fontWeight={600}
-          fill="#b5653a"
+          fill={invalid ? '#be2d2d' : '#b5653a'}
           stroke="#fff"
           strokeWidth={3 / scale}
           paintOrder="stroke"
         >
-          {ref.w} × {ref.d}
+          {invalid ? `位置冲突 · ${ref.w} × ${ref.d}` : `${ref.w} × ${ref.d}`}
         </text>
       </g>
     );

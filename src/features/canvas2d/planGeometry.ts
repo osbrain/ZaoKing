@@ -20,7 +20,7 @@ const OPENING_PRESETS = {
 
 export type Rect = [number, number, number, number];
 
-export interface DragState { id: string; x: number; y: number; rot: number }
+export interface DragState { id: string; x: number; y: number; rot: number; invalid?: boolean }
 export interface WallEdit { id: string; dx?: number; dy?: number; rect?: Rect }
 
 export const centerInRect = (r: Rect, wall: { x0: number; y0: number; x1: number; y1: number }) => {
