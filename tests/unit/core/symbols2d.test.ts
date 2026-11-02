@@ -75,3 +75,14 @@ describe('parameterized cabinet symbols', () => {
     expect(rectangleSizes.every((size) => Number.isFinite(size) && size > 0)).toBe(true);
   });
 });
+
+describe('upholstered bed plan symbol', () => {
+  it('shows a layered top view with headboard, pillows, duvet, and runner', () => {
+    const svg = furnSVG('bed', 1800, 2000, '#718d99');
+
+    expect(svg).toContain('data-part="upholstered-headboard"');
+    expect(svg.match(/data-part="pillow"/g)).toHaveLength(2);
+    expect(svg).toContain('data-part="duvet"');
+    expect(svg).toContain('data-part="bed-runner"');
+  });
+});

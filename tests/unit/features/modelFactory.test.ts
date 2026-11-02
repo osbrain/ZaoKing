@@ -70,6 +70,31 @@ describe('3D furniture model factory', () => {
     environment.dispose();
   });
 
+  it('builds a detailed upholstered bed while preserving its declared footprint', () => {
+    const definition = assetById('a0_0');
+    expect(definition).toBeDefined();
+    if (!definition) return;
+
+    const factory = createModelFactory(null);
+    const object = factory.buildFurniture({ ...definition, cx: 0, cy: 0, rot: 0 });
+    const bounds = new THREE.Box3().setFromObject(object);
+    const size = bounds.getSize(new THREE.Vector3());
+    let meshCount = 0;
+    let wovenMaterialCount = 0;
+    object.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      meshCount++;
+      if (child.material instanceof THREE.MeshPhysicalMaterial && child.material.map) wovenMaterialCount++;
+    });
+    expect(size.x).toBeCloseTo(definition.w / 1000, 3);
+    expect(size.z).toBeCloseTo(definition.d / 1000, 3);
+    expect(meshCount).toBeGreaterThan(40);
+    expect(wovenMaterialCount).toBeGreaterThan(0);
+
+    disposeModelGeometry(object);
+    factory.dispose();
+  });
+
   it.each(['box', 'cylinder'] as const)('matches asset dimensions for a custom %s', (shape) => {
     const environment = new THREE.Texture();
     const factory = createModelFactory(environment);

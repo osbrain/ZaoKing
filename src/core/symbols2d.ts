@@ -72,17 +72,33 @@ export function furnSVG(t: string, w: number, d: number, c: string, geometry?: A
     case 'custom':
       return customPlanSvg(geometry?.shape ?? 'box', w, d, c, geometry?.parameters);
     case 'bed': {
-      let s = rc(x, y, w, d, '#fbf8f2', 'rx="30"') + rc(x, y, w, Math.min(90, d * 0.05), shade(c, 0.62), 'rx="20"');
-      const ph = Math.min(360, d * 0.18);
-      const py = y + 150;
-      if (w >= 1300) {
-        const pw = (w - 240) / 2;
-        s += rc(x + 80, py, pw, ph, '#fff', 'rx="70"') + rc(x + 160 + pw, py, pw, ph, '#fff', 'rx="70"');
-      } else s += rc(x + 80, py, w - 160, ph, '#fff', 'rx="70"');
-      const by = py + ph + 110;
-      const bh = y + d - 15 - by;
-      s += rc(x + 15, by, w - 30, bh, c, 'rx="40"') + pa(`M${x + 15} ${by + 300}H${x + w - 15}`, 'none', DASH);
-      s += pa(`M${x + w - 15 - Math.min(420, w * 0.3)} ${by}L${x + w - 15} ${by}L${x + w - 15} ${by + Math.min(420, w * 0.3)}Z`, shade(c, 1.12));
+      const frame = Math.max(45, Math.min(90, m * .045));
+      const head = Math.max(100, Math.min(180, d * .085));
+      const headY = y + frame * .45;
+      let s = rc(x, y, w, d, shade('#806955', .9), 'rx="34" data-part="bed-platform"');
+      s += rc(x + frame * .55, y + frame * .55, w - frame * 1.1, d - frame * 1.1, '#eeeae2', 'rx="34" data-part="mattress"');
+      s += rc(x + frame * .35, headY, w - frame * .7, head, shade(c, .86), 'rx="28" data-part="upholstered-headboard"');
+      const channelCount = Math.max(3, Math.min(10, Math.round(w / 260)));
+      for (let index = 1; index < channelCount; index++) {
+        const xx = x + frame * .35 + (w - frame * .7) * index / channelCount;
+        s += ln(xx, headY + 18, xx, headY + head - 18, 'opacity=".45"');
+      }
+      const pillowCount = w >= 1300 ? 2 : 1;
+      const pillowGap = Math.max(35, w * .035);
+      const pillowWidth = (w - frame * 1.8 - pillowGap * (pillowCount - 1)) / pillowCount;
+      const pillowH = Math.min(330, d * .16);
+      const pillowY = headY + head + frame * .25;
+      for (let index = 0; index < pillowCount; index++) {
+        const px = x + frame * .9 + index * (pillowWidth + pillowGap);
+        s += rc(px, pillowY, pillowWidth, pillowH, '#f9f6f0', 'rx="72" data-part="pillow"');
+        s += pa(`M${px + pillowWidth * .2} ${pillowY + pillowH * .5}Q${px + pillowWidth * .5} ${pillowY + pillowH * .42} ${px + pillowWidth * .8} ${pillowY + pillowH * .5}`, 'none', 'stroke="#d4cec3" stroke-width="12" vector-effect="non-scaling-stroke"');
+      }
+      const duvetY = pillowY + pillowH + frame * .35;
+      const duvetH = Math.max(0, y + d - frame * .75 - duvetY);
+      s += rc(x + frame * .8, duvetY, w - frame * 1.6, duvetH, c, 'rx="42" data-part="duvet"');
+      s += pa(`M${x + frame * .8} ${duvetY + duvetH * .18}Q${x + w * .5} ${duvetY + duvetH * .14} ${x + w - frame * .8} ${duvetY + duvetH * .18}`, 'none', 'stroke="#ffffff" stroke-opacity=".42" stroke-width="18" vector-effect="non-scaling-stroke"');
+      s += rc(x + frame * 1.3, y + d - frame * 2.1, w - frame * 2.6, frame * .75, shade(c, .82), 'rx="16" data-part="bed-runner"');
+      s += pa(`M${x + frame * 1.5} ${y + d - frame * 1.72}H${x + w - frame * 1.5}`, 'none', 'stroke="#f7f2e9" stroke-width="12" stroke-dasharray="28 22" vector-effect="non-scaling-stroke"');
       return s;
     }
     case 'bunkbed': {

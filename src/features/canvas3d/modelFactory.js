@@ -137,6 +137,30 @@ const blackMetal = () => mat('#2b2b2d', {metalness:.6, roughness:.4});
 const mirror = () => mat('#dfeaee', {metalness:.55, roughness:.06});
 const ceramic = (o = {}) => mat('#fbfbf9', {roughness:.12, ...o});
 const fabric = c => mat(c, {roughness:.96});
+function wovenFabric(color){
+  const key = `woven:${color}`;
+  if (matCache.has(key)) return matCache.get(key);
+  const size = 96, data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++){
+    const thread = (x % 4 === 0 ? 7 : 0) + (y % 4 === 0 ? 6 : 0);
+    const grain = ((x * 17 + y * 29 + x * y) % 7) - 3;
+    const value = Math.max(0, Math.min(255, 248 - thread + grain));
+    const offset = (y * size + x) * 4;
+    data[offset] = data[offset + 1] = data[offset + 2] = value;
+    data[offset + 3] = 255;
+  }
+  const weave = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  weave.wrapS = weave.wrapT = THREE.RepeatWrapping;
+  weave.repeat.set(5, 5);
+  weave.colorSpace = THREE.SRGBColorSpace;
+  weave.needsUpdate = true;
+  const material = new THREE.MeshPhysicalMaterial({
+    color, map: weave, bumpMap: weave, bumpScale: .0008,
+    roughness: .94, sheen: .28, sheenRoughness: .9,
+  });
+  matCache.set(key, material);
+  return material;
+}
 const woodM = c => mat(c, {roughness:.55});
 const screenMat = (glow = '#1a2636') => mat('#0b0e13', {roughness:.1, metalness:.3, emissive:glow, emissiveIntensity:.35});
 const glowMat = (c = '#fff4dc', e = '#ffdca0', k = .5) => mat(c, {emissive:e, emissiveIntensity:k, roughness:.9, side:THREE.DoubleSide});
@@ -391,18 +415,87 @@ function buildFurniture(f){
       break;
     }
     case 'bed': {
-      const fr = woodM('#8d7258'), fab = fabric(c), fh = .3, mt = .22, top = fh + mt, n = Math.max(3, Math.round(w/.28)), sw = (w - .04)/n;
-      g.add(box(w - .12, .06, d - .14, '#4a3e33', 0, 0, .03), rbox(w, fh - .06, d - .08, fr, 0, .06, .04, .015));        // 内缩踢脚 + 床箱
-      g.add(rbox(w, 1.08, .06, fr, 0, 0, bz + .03, .012));                                                                 // 床头板
-      for (let i = 0; i < n; i++) g.add(rbox(sw - .006, .62, .06, fabric(darker(c, .8)), -w/2 + .02 + sw*(i + .5), .42, bz + .08, .025));   // 竖向软包
-      const md = d - .13, dd = md*.66, dz = d/2 - .015 - dd/2;
-      g.add(rbox(w - .06, mt, md, '#ded8ce', 0, fh, bz + .11 + md/2, .07));                                              // 床垫
-      g.add(rbox(w + .02, .27, dd, fab, 0, top - .2, dz, .04), rbox(w + .024, .06, .22, fabric('#e8e2d8'), 0, top + .025, dz - dd/2 + .11, .025));   // 被子 + 翻边
-      g.add(rbox(w + .05, .285, .42, fabric(darker(c, .62)), 0, top - .205, d/2 - .35, .03));                               // 床尾巾
-      const np = w >= 1.3 ? 2 : 1, pw = (w - .16 - (np-1)*.06)/np;
-      for (let i = 0; i < np; i++){
-        const x = -w/2 + .08 + pw/2 + i*(pw + .06);
-        g.add(rot(rbox(pw, .15, .42, fabric('#e5dfd5'), x, top - .01, bz + .34, .07), -.28), rot(rbox(pw*.62, .3, .1, fabric(i ? '#d8cfc1' : darker(c, .7)), x, top, bz + .54, .045), -.3));
+      const frame = woodM('#806955'), frameEdge = woodM('#59483a');
+      const headFabric = wovenFabric(darker(c, .92)), duvetFabric = wovenFabric(c);
+      const pillowFabric = wovenFabric('#e9e3d9'), stitch = mat(darker(c, .78), {roughness:.98});
+      const baseH = .2, mattressY = baseH + .025, mattressH = .22, mattressTop = mattressY + mattressH;
+      const headZ = bz + .055, headH = Math.min(.88, M(f.h) * .72);
+
+      g.add(rbox(w - .04, baseH, d, frame, 0, 0, 0, .025));
+      g.add(rbox(w - .12, .055, d - .12, frameEdge, 0, .025, 0, .018));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const leg = rbox(.075, .12, .075, frameEdge, sx * (w / 2 - .13), 0, sz * (d / 2 - .13), .012);
+        g.add(leg);
+      }
+
+      g.add(rbox(w, headH, .11, frame, 0, .08, headZ, .045));
+      g.add(rbox(w - .055, headH - .07, .045, headFabric, 0, .12, headZ + .078, .04));
+      const channelCount = Math.max(4, Math.min(12, Math.round(w / .22)));
+      const channelWidth = (w - .11) / channelCount;
+      for (let index = 0; index < channelCount; index++) {
+        const x = -w / 2 + .055 + channelWidth * (index + .5);
+        g.add(rbox(channelWidth - .014, headH - .11, .024, wovenFabric(index % 2 ? darker(c, .9) : lighter(c, .08)), x, .14, headZ + .107, .018));
+        if (index > 0) g.add(tube([[x - channelWidth / 2, .17, headZ + .121], [x - channelWidth / 2, headH + .08, headZ + .121]], .0018, stitch, 8));
+        for (const y of [.34, .57, .8]) {
+          if (y > headH - .04) continue;
+          g.add(blob(.009, .009, .009, frameEdge, x, y, headZ + .124, 10));
+        }
+      }
+
+      const mattressW = w - .08, mattressD = d - .18;
+      g.add(rbox(mattressW, mattressH, mattressD, mat('#eeeae2', {roughness:.93}), 0, mattressY, .015, .07));
+      const seamY = mattressTop - .035, seamW = mattressW - .11, seamD = mattressD - .1;
+      const mattressSeam = mat('#d1cbc1', {roughness:.95});
+      g.add(
+        box(seamW, .006, .006, mattressSeam, 0, seamY, -seamD / 2),
+        box(seamW, .006, .006, mattressSeam, 0, seamY, seamD / 2),
+        box(.006, .006, seamD, mattressSeam, -seamW / 2, seamY, 0),
+        box(.006, .006, seamD, mattressSeam, seamW / 2, seamY, 0),
+      );
+
+      const pillowCount = w >= 1.3 ? 2 : 1;
+      const pillowDepth = Math.min(.42, d * .22);
+      const pillowWidth = (w - .2 - (pillowCount - 1) * .06) / pillowCount;
+      const pillowZ = -d * .28;
+      for (let index = 0; index < pillowCount; index++) {
+        const x = -w / 2 + .1 + pillowWidth / 2 + index * (pillowWidth + .06);
+        g.add(rbox(pillowWidth, .11, pillowDepth, pillowFabric, x, mattressTop - .01, pillowZ, .075));
+        const edgeX = pillowWidth * .36, edgeZ = pillowDepth * .31, lineY = mattressTop + .093;
+        const pillowSeam = mat('#c9c1b5', {roughness:.98});
+        g.add(
+          box(edgeX * 2, .003, .003, pillowSeam, x, lineY, pillowZ - edgeZ),
+          box(edgeX * 2, .003, .003, pillowSeam, x, lineY, pillowZ + edgeZ),
+          box(.003, .003, edgeZ * 2, pillowSeam, x - edgeX, lineY, pillowZ),
+          box(.003, .003, edgeZ * 2, pillowSeam, x + edgeX, lineY, pillowZ),
+        );
+        g.add(tube([[x - pillowWidth * .3, lineY, pillowZ], [x, lineY + .001, pillowZ - pillowDepth * .03], [x + pillowWidth * .3, lineY, pillowZ]], .0014, mat('#d5cec2', {roughness:.98}), 16));
+      }
+
+      const blanketW = w - .14, blanketD = d * .57, blanketZ = d * .205;
+      const columns = 28, rows = 36, positions = [], indices = [];
+      for (let row = 0; row <= rows; row++) for (let column = 0; column <= columns; column++) {
+        const u = column / columns, v = row / rows;
+        const x = (u - .5) * blanketW;
+        const z = (v - .5) * blanketD;
+        const fold = Math.sin(u * 24 + v * 8) * .0045 + Math.sin(u * 43 - v * 16) * .002 + Math.cos(v * 36 + u * 5) * .0025;
+        const edge = Math.pow(Math.abs(u - .5) * 2, 5) * .008;
+        positions.push(x, fold - edge, z);
+        if (row < rows && column < columns) {
+          const a = row * (columns + 1) + column, b = a + 1, c0 = a + columns + 1, d0 = c0 + 1;
+          indices.push(a, c0, b, b, c0, d0);
+        }
+      }
+      const duvet = new THREE.BufferGeometry();
+      duvet.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      duvet.setIndex(indices);
+      duvet.computeVertexNormals();
+      const cover = new THREE.Mesh(duvet, duvetFabric);
+      cover.position.set(0, mattressTop + .012, blanketZ);
+      cover.castShadow = cover.receiveShadow = true;
+      g.add(cover);
+      g.add(rbox(blanketW * .93, .024, .15, wovenFabric(darker(c, .9)), 0, mattressTop + .018, d * .405, .025));
+      for (const offset of [-.025, .025]) {
+        g.add(tube([[-blanketW * .44, mattressTop + .024, d * .405 + offset], [0, mattressTop + .025, d * .405 + offset], [blanketW * .44, mattressTop + .024, d * .405 + offset]], .0016, stitch, 28));
       }
       break;
     }
@@ -931,7 +1024,7 @@ function buildFurniture(f){
   return {
     buildFurniture, floorMat,
     dispose() {
-      for (const material of matCache.values()) material.dispose();
+      for (const material of matCache.values()) { material.map?.dispose(); material.bumpMap?.dispose(); material.dispose(); }
       for (const material of Object.values(floorMats)) {
         material.map?.dispose(); material.dispose();
       }
