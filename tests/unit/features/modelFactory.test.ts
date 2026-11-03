@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { assetById } from '@/core/assets';
 import { COMPONENT_TEMPLATES } from '@/core/componentTemplates';
 import type { CustomAsset } from '@/core/types';
@@ -202,5 +202,29 @@ describe('3D furniture model factory', () => {
     disposeModelGeometry(model);
     factory.dispose();
     environment.dispose();
+  });
+
+  it('loads PBR floor maps with factory-scoped texture caches', () => {
+    vi.stubGlobal('document', {
+      createElementNS: vi.fn(() => ({
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    const firstFactory = createModelFactory(null, 2);
+    const secondFactory = createModelFactory(null, 7);
+
+    try {
+      const firstMaterial = firstFactory.floorMat('wood');
+      const secondMaterial = secondFactory.floorMat('wood');
+
+      expect(firstMaterial.map?.anisotropy).toBe(2);
+      expect(secondMaterial.map?.anisotropy).toBe(7);
+      expect(secondMaterial.map).not.toBe(firstMaterial.map);
+    } finally {
+      firstFactory.dispose();
+      secondFactory.dispose();
+      vi.unstubAllGlobals();
+    }
   });
 });

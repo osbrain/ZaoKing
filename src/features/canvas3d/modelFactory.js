@@ -33,7 +33,27 @@ const TEX = {
   antislip:{sx:.3, sy:.3, base:'#afb8b3', grout:'#858f88', rough:.84}, marble:{sx:1.2, sy:1.2, base:'#d9d5cd', grout:'#bcb4a7', rough:.24},
   terrazzo:{sx:.5, sy:.5, base:'#c9bca9', rough:.47}, carpet:{sx:.3, sy:.3, base:'#958ca7', rough:1},
 };
+// CC0 实拍 PBR 地板贴图（ambientCG.com），color/normal/roughness 三通道；
+// coverM = 一张贴图覆盖的真实米数。用户改过花色或砖尺寸时回落到程序化贴图。
+const PBR_FLOORS = {
+  wood:{coverM:1.05}, walnut:{coverM:1.05}, tile800:{coverM:.8}, tile600:{coverM:.6},
+  marble:{coverM:1.2}, terrazzo:{coverM:1}, carpet:{coverM:.5}, antislip:{coverM:1.8},
+};
 const floorMats = {};
+const pbrLoader = typeof document === 'undefined' ? null : new THREE.TextureLoader();
+const pbrTexCache = {};
+function pbrTex(dir, file, coverM, srgb){
+  const path = `/textures/floors/${dir}/${file}`;
+  if (!pbrTexCache[path]){
+    const t = pbrLoader.load(path);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(1/coverM, 1/coverM);
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = anisotropy;
+    pbrTexCache[path] = t;
+  }
+  return pbrTexCache[path];
+}
 function floorMat(kind, definition = {}){
   const key = kind + ':' + JSON.stringify(definition);
   if (floorMats[key]) return floorMats[key];
@@ -49,6 +69,22 @@ function floorMat(kind, definition = {}){
     grout: render.groutColor || defaults.grout,
   };
   const pattern = render.pattern || (kind === 'wood' || kind === 'walnut' ? 'wood' : kind === 'marble' || kind === 'terrazzo' || kind === 'carpet' ? kind : 'tile');
+  const pbr = PBR_FLOORS[kind];
+  const defaultPattern = kind === 'wood' || kind === 'walnut' ? 'wood' : kind === 'marble' || kind === 'terrazzo' || kind === 'carpet' ? kind : 'tile';
+  const untouchedTile = !render.tileMm || (Math.abs(render.tileMm[0] - defaults.sx * 1000) < 1 && Math.abs(render.tileMm[1] - defaults.sy * 1000) < 1);
+  const untouchedGrout = !render.groutColor || render.groutColor === defaults.grout;
+  if (pbr && pbrLoader && pattern === defaultPattern && untouchedTile && untouchedGrout){
+    // 实拍贴图自带真实颜色；自定义色号作为染色叠加，保持 PBR 质感
+    const tint = !definition.sw || definition.sw.toLowerCase() === defaults.base.toLowerCase() ? '#ffffff' : definition.sw;
+    return floorMats[key] = new THREE.MeshStandardMaterial({
+      color: tint,
+      map: pbrTex(kind, 'color.jpg', pbr.coverM, true),
+      normalMap: pbrTex(kind, 'normal.jpg', pbr.coverM),
+      roughnessMap: pbrTex(kind, 'roughness.jpg', pbr.coverM),
+      roughness: s.rough,
+      ...(envTex ? { envMap: envTex, envMapIntensity: s.rough < .4 ? .5 : .25 } : {}),
+    });
+  }
   if (pattern === 'plain') return floorMats[key] = new THREE.MeshStandardMaterial({ color: s.base, roughness: s.rough });
   const R = rng(key.length*977 + 13), cv = document.createElement('canvas');
   const wood = pattern === 'wood';
@@ -1026,8 +1062,9 @@ function buildFurniture(f){
     dispose() {
       for (const material of matCache.values()) { material.map?.dispose(); material.bumpMap?.dispose(); material.dispose(); }
       for (const material of Object.values(floorMats)) {
-        material.map?.dispose(); material.dispose();
+        material.map?.dispose(); material.normalMap?.dispose(); material.roughnessMap?.dispose(); material.dispose();
       }
+      for (const texture of Object.values(pbrTexCache)) texture.dispose();
     glassMat.dispose(); frameMat.dispose();
     },
   };

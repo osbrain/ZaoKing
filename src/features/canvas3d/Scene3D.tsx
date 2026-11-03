@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useEditorStore } from '@/stores/editorStore';
 import { assetById, materialById } from '@/core/assets';
@@ -270,15 +271,39 @@ function DetailedScene({ level, assets, materials, cutHeight, labels, hour, show
   const { gl, scene } = useThree();
   const [models, setModels] = useState<ModelFactory | null>(null);
   useEffect(() => {
+    let disposed = false;
+    const models: { current: ModelFactory | null } = { current: null };
+    const env: { current: THREE.WebGLRenderTarget | null } = { current: null };
+    const apply = (texture: THREE.Texture) => {
+      if (disposed) return;
+      scene.environment = texture;
+      scene.environmentIntensity = 0.35;
+      models.current?.dispose();
+      models.current = createModelFactory(texture, Math.min(8, gl.capabilities.getMaxAnisotropy()));
+      setModels(models.current);
+    };
+    // RoomEnvironment 先行保证首帧有环境光，Poly Haven HDRI（CC0）加载完成后整场替换
     const generator = new THREE.PMREMGenerator(gl);
     const room = new RoomEnvironment();
-    const environment = generator.fromScene(room, 0.04);
-    const factory = createModelFactory(environment.texture, Math.min(8, gl.capabilities.getMaxAnisotropy()));
-    scene.environment = environment.texture;
-    scene.environmentIntensity = 0.5;
+    const fallback = generator.fromScene(room, 0.04);
     generator.dispose(); room.dispose();
-    setModels(factory);
-    return () => { scene.environment = null; factory.dispose(); environment.dispose(); };
+    env.current = fallback;
+    apply(fallback.texture);
+    new RGBELoader().load('/textures/env/studio_small_03_1k.hdr', hdr => {
+      const gen = new THREE.PMREMGenerator(gl);
+      const rt = gen.fromEquirectangular(hdr);
+      gen.dispose(); hdr.dispose();
+      if (disposed) { rt.dispose(); return; }
+      fallback.dispose();
+      env.current = rt;
+      apply(rt.texture);
+    });
+    return () => {
+      disposed = true;
+      scene.environment = null;
+      models.current?.dispose();
+      env.current?.dispose();
+    };
   }, [gl, scene]);
   const bb = docBBox(level);
   return <>
