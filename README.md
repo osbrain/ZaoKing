@@ -47,12 +47,15 @@ The editor keeps a structured `SceneDocument` as the source for the design. It c
 
 The main interaction flow is:
 
-```text
-Canvas or inspector action ─┐
-AI tool request ────────────┼─> validated scene operation ─> scene state
-                            │                              ├─> 2D rendering
-                            │                              ├─> 3D rendering
-                            └──────────────────────────────└─> autosave / export
+```mermaid
+flowchart LR
+    Canvas["Canvas / Inspector"] --> Scene["SceneDocument"]
+    AI["AI tool request"] --> Validate["Resolve and validate operation"]
+    Validate --> Scene
+    Scene --> View2D["2D rendering"]
+    Scene --> View3D["3D rendering"]
+    Scene --> Save["Autosave"]
+    Scene --> Export["Design package export"]
 ```
 
 For AI changes, the server sends the current room and component context to a compatible language model. The model can request a defined tool such as adding, resizing, deleting, or recoloring an item. The application resolves that request against the asset catalog, validates supported fields and layout constraints, then applies the resulting operation. Screenshot recognition is a separate vision workflow that returns a draft for user review.
