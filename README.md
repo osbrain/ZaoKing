@@ -1,55 +1,83 @@
-# ZaoKing | AI 辅助室内设计工作台
+# ZaoKing
 
-[简体中文](README.md) · [English](README_EN.md)
+### AI-Assisted Interior Design Workspace
 
-ZaoKing 是一款面向装修业主与独立设计师的 Web 室内设计工具。它把户型编辑、家具布置、材质调整和 AI 辅助设计放在同一个工作流中，并让 2D 平面图与 3D 场景共享同一份设计数据。
+[English](README.md) · [简体中文](README_ZH.md)
 
-> 项目仍在积极开发中。目前提供可运行的设计工作台原型，功能和数据模型持续迭代。
+ZaoKing is a web-based interior design workspace for homeowners and independent designers. It brings floor-plan editing, furniture layout, material editing, and AI-assisted changes into one workflow. The 2D plan and 3D scene are projections of the same structured design document.
 
-## 产品预览
+> **Project status:** ZaoKing is under active development. This repository contains a working product prototype. Features, data models, and APIs may change as the project evolves.
 
-### 项目工作台
+## Product Preview
 
-![ZaoKing 项目工作台：管理户型与设计方案](docs/images/dashboard.png)
+### Project Dashboard
 
-### 2D 户型设计
+Manage design projects and open a floor plan in the editor.
 
-![ZaoKing 2D 编辑器：编辑户型、尺寸和家具布局，并使用 AI 助手](docs/images/editor-2d.png)
+![ZaoKing project dashboard for managing floor plans and design projects](docs/images/dashboard.png)
 
-### 3D 空间预览
+### 2D Floor-Plan Editor
 
-![ZaoKing 3D 场景：预览房间结构、家具和材质效果](docs/images/editor-3d.png)
+Edit rooms, walls, openings, dimensions, and furniture, with the AI assistant available alongside the canvas.
 
-## 功能概览
+![ZaoKing 2D editor for editing floor plans, dimensions, furniture, and AI-assisted changes](docs/images/editor-2d.png)
 
-- **户型编辑**：在 2D 画布中编辑房间、墙体、门窗和尺寸标注，并通过网格与朝向辅助定位。
-- **2D / 3D 联动**：以统一的场景文档保存户型和家具数据，在平面编辑与 3D 空间预览间切换。
-- **家具与组件**：从组件库放置家具，调整位置、朝向和长宽高；支持自定义组件与材质。
-- **AI 设计助手**：通过自然语言提出设计修改，AI 将请求转换为结构化操作，并由应用校验和应用。
-- **户型截图识别**：配置视觉模型后，可上传户型截图生成可继续编辑的户型草稿。
-- **方案与数据包**：保存项目和 AI 对话，导入或导出参数化设计数据包。
-- **空间检查**：提示家具与门扇、通行空间等布局问题，帮助用户在方案阶段发现冲突。
-- **3D 材质**：使用 PBR 地面贴图和 HDRI 环境光呈现更具层次的空间预览。
+### 3D Scene Preview
 
-## 技术栈
+Inspect room structure, furniture placement, materials, and spatial checks in a synchronized 3D view.
 
-| 层次 | 技术 |
+![ZaoKing 3D scene preview showing room structure, furniture, and materials](docs/images/editor-3d.png)
+
+## What You Can Do
+
+- **Create and edit floor plans.** Work with rooms, walls, doors, windows, openings, dimensions, a toggleable grid, and orientation indicators.
+- **Move between 2D and 3D.** Edit a plan and inspect the corresponding room layout in a 3D scene backed by the same design data.
+- **Arrange and customize furniture.** Add catalog components, place and rotate them, adjust width, depth, and height, and edit supported component parameters.
+- **Ask the AI assistant to make changes.** Describe additions, deletions, replacements, moves, size changes, colors, or floor materials in natural language.
+- **Import a floor-plan image.** Use a configured vision model to create a draft from an uploaded screenshot, then review and edit the recognized geometry.
+- **Check a layout.** Surface selected furniture clearance and door-swing conflicts while arranging a room.
+- **Save and exchange design data.** Persist projects and conversations locally and import or export parameterized design packages.
+- **Preview materials in 3D.** Use PBR floor textures and HDRI-based environment lighting.
+
+AI recognition and layout checks are design aids. They do not certify measurements, accessibility, code compliance, structural safety, or construction feasibility. Verify important dimensions and site conditions with qualified professionals before purchasing or building.
+
+## How the Design Data Works
+
+The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. The 2D canvas and the Three.js scene render that document in their respective views.
+
+The main interaction flow is:
+
+```text
+Canvas or inspector action ─┐
+AI tool request ────────────┼─> validated scene operation ─> scene state
+                            │                              ├─> 2D rendering
+                            │                              ├─> 3D rendering
+                            └──────────────────────────────└─> autosave / export
+```
+
+For AI changes, the server sends the current room and component context to a compatible language model. The model can request a defined tool such as adding, resizing, deleting, or recoloring an item. The application resolves that request against the asset catalog, validates supported fields and layout constraints, then applies the resulting operation. Screenshot recognition is a separate vision workflow that returns a draft for user review.
+
+## Technology
+
+| Area | Stack |
 | --- | --- |
-| Web 应用 | Next.js 14 App Router、React 18、TypeScript、Tailwind CSS |
-| 2D / 3D | React 画布、Three.js、React Three Fiber、Drei |
-| 状态管理 | Zustand |
-| 服务端与数据 | Next.js Route Handlers、Prisma、SQLite（本地默认配置） |
-| AI 与校验 | DeepSeek 兼容 API、视觉模型兼容 API、Zod |
-| 测试 | Vitest |
+| Web application | Next.js 14 App Router, React 18, TypeScript, Tailwind CSS |
+| Scene rendering | Three.js, React Three Fiber, Drei |
+| Client state | Zustand |
+| Server APIs | Next.js Route Handlers |
+| Persistence | Prisma ORM with SQLite by default |
+| Validation | Zod and shared scene / asset schemas |
+| AI providers | DeepSeek-compatible text API; configurable vision API; optional OpenAI-compatible text provider |
+| Tests | Vitest |
 
-## 本地开发
+## Run Locally
 
-### 环境要求
+### Requirements
 
-- Node.js 20 或更新的 LTS 版本
+- Node.js 20 or a newer LTS release
 - npm
 
-### 安装与启动
+### Install
 
 ```bash
 git clone https://github.com/osbrain/ZaoKing.git
@@ -60,52 +88,65 @@ npx prisma db push
 npm run dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。
+Open [http://localhost:3000](http://localhost:3000).
 
-### AI 配置
+The local Prisma schema uses SQLite. The development database is created at `prisma/dev.db` and is ignored by Git.
 
-编辑本地 `.env`：
+### Configure AI
+
+Add provider credentials to `.env` on your machine:
 
 ```dotenv
-DEEPSEEK_API_KEY=你的DeepSeek密钥
-VISION_API_KEY=你的视觉模型密钥
+DEEPSEEK_API_KEY=your_deepseek_api_key
+VISION_API_KEY=your_vision_model_api_key
 ```
 
-`DEEPSEEK_API_KEY` 用于文本设计助手；`VISION_API_KEY` 用于户型截图识别。视觉服务的模型和兼容接口地址可通过 `.env.example` 中的 `VISION_MODEL`、`VISION_BASE_URL` 配置。密钥只应保存在本地或部署平台的环境变量中，不要提交到 Git。
+- `DEEPSEEK_API_KEY` enables the text design assistant. The base URL and model can be set with `DEEPSEEK_BASE_URL` and `DEEPSEEK_MODEL`.
+- `VISION_API_KEY` enables floor-plan screenshot recognition. The default provider is configured for Qwen3-VL-Plus. Override it with `VISION_BASE_URL` and `VISION_MODEL` if using another compatible vision endpoint.
+- `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are available for the optional OpenAI-compatible text provider.
+- `DATABASE_URL` defaults to the local SQLite file shown in `.env.example`.
 
-不配置 AI 密钥时，项目的非 AI 页面和设计工作流仍可用于本地开发；AI 功能需要配置对应服务凭据。
+Keep API keys in local or deployment environment variables. Never commit `.env` or paste provider credentials into issues, screenshots, or source files. AI features require their respective provider credentials; the rest of the local prototype can be explored without them.
 
-## 常用命令
+## Development Commands
 
 ```bash
-npm run dev        # 启动开发服务
-npm run typecheck  # TypeScript 类型检查
-npm test           # 运行单元测试
-npm run build      # 创建生产构建
-npm start          # 启动生产服务
+npm run dev        # Start the development server
+npm run typecheck  # Run the TypeScript type check
+npm test           # Run unit tests
+npm run build      # Create a production build
+npm start          # Start the production server
 ```
 
-## 项目结构
+The development server and production build both use `.next`. Stop the development server before running `npm run build`, then restart it when you return to development.
+
+## Repository Layout
 
 ```text
 src/
-  app/                    页面与 API Route Handlers
-  core/                   场景模型、Schema、几何、命令与布局校验
-  features/               编辑器、画布、AI 助手、组件库等功能模块
-  lib/                    数据库、AI Provider、API 与自动保存服务
-  stores/                 Zustand 场景与编辑器状态
-tests/unit/               按领域、功能和 API 组织的单元测试
-prisma/                   Prisma 数据模型
-public/textures/          3D 地面与环境贴图
-docs/images/              README 产品截图
+  app/                       Pages and API Route Handlers
+  core/                      Scene document, schemas, geometry, operations, validation
+  features/                  Editor, 2D / 3D canvases, AI chat, library, inspector
+  lib/                       Database, AI providers, API and autosave helpers
+  stores/                    Zustand scene and editor state
+tests/unit/                  Tests grouped by domain, feature and API
+prisma/                      Prisma schema and local development database
+public/textures/              3D floor and environment textures
+docs/images/                 README screenshots
 ```
 
-## 设计数据与部署说明
+The domain logic in `src/core` is kept independent of React where practical, so scene schemas, geometry, layout rules, and operations can be shared by the editor and server-side AI workflows.
 
-2D 和 3D 视图围绕同一份场景文档工作。墙体、房间、开口、材质和家具实例以结构化数据保存；画布负责将这些数据映射为平面图和 3D 场景。AI 生成的修改也会先转为受 Schema 约束的设计操作，再由场景逻辑校验。
+## Current Scope and Deployment Notes
 
-仓库中的 Prisma schema 默认使用 SQLite，适合本地开发和原型验证。正式部署前，需要根据部署环境选择数据库、配置连接与迁移策略，并评估文件存储、认证、权限、备份和 AI 服务配额。当前仓库不应被视为已完成生产部署加固的 SaaS 服务。
+The repository is a development prototype, not a production-hardened hosted service. SQLite is the default local persistence setup. A production deployment needs an intentional database and migration strategy, authentication and project authorization, persistent file storage for uploads, backups, observability, rate limits, and controls for AI cost and availability. Review the upload and provider limits for the deployment environment before exposing the service publicly.
 
-## 许可证与素材
+The screenshot importer produces a draft from model output; users should review room boundaries, dimensions, doors, and windows before relying on it. The current spatial checks cover selected layout constraints and are not a substitute for a complete building-code or construction-planning engine.
 
-目前仓库尚未添加项目代码许可证。除非仓库另行添加许可证，项目代码默认不授予复用、修改或分发权限。3D 环境与地面素材的来源及许可说明见 [`public/textures/README.md`](public/textures/README.md)。
+## License
+
+ZaoKing project code is licensed under the [Apache License 2.0](LICENSE). Third-party textures and other assets can have separate terms; see [`public/textures/README.md`](public/textures/README.md) and the notices shipped with each asset. The project license does not grant rights to third-party brands or services.
+
+## Contributing
+
+Issues and pull requests are welcome. For a useful bug report, include the affected workflow, reproducible steps, expected and actual behavior, and relevant browser or server errors. Remove personal floor plans, API keys, and other private data before attaching logs or screenshots.
