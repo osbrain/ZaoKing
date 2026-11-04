@@ -110,6 +110,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   /* 快捷键 */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       const scene = useSceneStore.getState();

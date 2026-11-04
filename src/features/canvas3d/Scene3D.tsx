@@ -2,7 +2,7 @@
 
 /* Detailed prototype models with live document geometry and editor selection.
  * Plan x maps to x, plan y to -z; all rendered distances use metres. */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
@@ -17,6 +17,8 @@ import { buildWallSolids } from '@/core/wallGeometry';
 import { createModelFactory, disposeModelGeometry } from './modelFactory';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import OrientationCompass from '@/features/editor/OrientationCompass';
+import WalkModeControls from './WalkModeControls';
+import { findWalkSpawn } from './walkNavigation';
 
 type ModelFactory = ReturnType<typeof createModelFactory>;
 
@@ -66,8 +68,12 @@ function WindowFrame({ opening, cutHeight }: { opening: Opening; cutHeight: numb
   );
 }
 
-function DoorLeaf({ opening, cutHeight }: { opening: Opening; cutHeight: number }) {
-  const [open, setOpen] = useState(true);
+function DoorLeaf({ opening, cutHeight, open, onToggle }: {
+  opening: Opening;
+  cutHeight: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const hinge = opening.hinge;
   if (!hinge || !opening.openDir || !opening.closeDir) return null;
   const height = Math.min(opening.height, cutHeight) / 1000;
@@ -77,7 +83,7 @@ function DoorLeaf({ opening, cutHeight }: { opening: Opening; cutHeight: number 
   const angle = Math.atan2(direction[1], direction[0]);
   return (
     <group position={[hinge[0] / 1000, 0, -hinge[1] / 1000]} rotation={[0, angle, 0]}
-      onClick={event => { event.stopPropagation(); setOpen(value => !value); }}>
+      onClick={event => { event.stopPropagation(); onToggle(); }}>
       <mesh position={[length / 2, height / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[length, height, 0.04]} />
         <meshStandardMaterial color={opening.kind === 'entry' ? '#6b4f3a' : '#c7ab87'} roughness={0.58} />
@@ -90,14 +96,20 @@ function DoorLeaf({ opening, cutHeight }: { opening: Opening; cutHeight: number 
   );
 }
 
-function Architecture({ level, cutHeight }: { level: Level; cutHeight: number }) {
+function Architecture({ level, cutHeight, openDoors, onToggleDoor }: {
+  level: Level;
+  cutHeight: number;
+  openDoors: Readonly<Record<string, boolean>>;
+  onToggleDoor: (doorId: string) => void;
+}) {
   const solids = useMemo(() => buildWallSolids(level, cutHeight), [level.walls, level.openings, cutHeight]);
   return (
     <group>
       {solids.map((s, i) => <Solid key={i} rect={[s.x0, s.y0, s.x1, s.y1]} bottom={s.bottom} top={s.top} color={s.color} />)}
       {level.openings.map(o => o.kind === 'window' || o.kind === 'sliding'
         ? <WindowFrame key={o.id} opening={o} cutHeight={cutHeight} />
-        : <DoorLeaf key={o.id} opening={o} cutHeight={cutHeight} />)}
+        : <DoorLeaf key={o.id} opening={o} cutHeight={cutHeight} open={openDoors[o.id] ?? true}
+            onToggle={() => onToggleDoor(o.id)} />)}
     </group>
   );
 }
@@ -267,7 +279,27 @@ function Lighting({ level, hour }: { level: Level; hour: number }) {
   </>;
 }
 
-function DetailedScene({ level, assets, materials, cutHeight, labels, hour, showGrid, arrowRef }: { level: Level; assets?: readonly Asset[]; materials: readonly Material[]; cutHeight: number; labels: boolean; hour: number; showGrid: boolean; arrowRef: RefObject<SVGGElement> }) {
+function DetailedScene({ level, assets, materials, cutHeight, labels, hour, showGrid, arrowRef,
+  walkMode, openDoors, spawnVersion, onWalkLockChange, onToggleDoor,
+  walkStarted, onWalkStart, onWalkPause,
+}: {
+  level: Level;
+  assets?: readonly Asset[];
+  materials: readonly Material[];
+  cutHeight: number;
+  labels: boolean;
+  hour: number;
+  showGrid: boolean;
+  arrowRef: RefObject<SVGGElement>;
+  walkMode: boolean;
+  openDoors: Readonly<Record<string, boolean>>;
+  spawnVersion: number;
+  walkStarted: boolean;
+  onWalkStart: () => void;
+  onWalkPause: () => void;
+  onWalkLockChange: (locked: boolean) => void;
+  onToggleDoor: (doorId: string) => void;
+}) {
   const { gl, scene } = useThree();
   const [models, setModels] = useState<ModelFactory | null>(null);
   useEffect(() => {
@@ -323,9 +355,13 @@ function DetailedScene({ level, assets, materials, cutHeight, labels, hour, show
       {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} materials={materials} />)}
       {level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} asset={assetById(inst.assetId, assets)} />)}
     </>}
-    <Architecture level={level} cutHeight={cutHeight} />
+    <Architecture level={level} cutHeight={cutHeight} openDoors={openDoors} onToggleDoor={onToggleDoor} />
     {labels && <RoomLabels level={level} />}
-    <OrbitControls makeDefault enableDamping dampingFactor={0.08} maxPolarAngle={Math.PI * 0.495} minDistance={1.2} maxDistance={120} />
+    {walkMode
+      ? <WalkModeControls level={level} assets={assets ?? []} openDoors={openDoors} spawnVersion={spawnVersion}
+          active={walkStarted} onStart={onWalkStart} onPause={onWalkPause}
+          onLockChange={onWalkLockChange} onToggleDoor={onToggleDoor} />
+      : <OrbitControls makeDefault enableDamping dampingFactor={0.08} maxPolarAngle={Math.PI * 0.495} minDistance={1.2} maxDistance={120} />}
     <NorthBearing arrowRef={arrowRef} />
     <Rig level={level} />
   </>;
@@ -345,7 +381,31 @@ export default function Scene3D() {
   const [cutHeight, setCutHeight] = useState(2800);
   const [labels, setLabels] = useState(true);
   const [hour, setHour] = useState(10);
+  const [walkMode, setWalkMode] = useState(false);
+  const [walkStarted, setWalkStarted] = useState(false);
+  const [walkLocked, setWalkLocked] = useState(false);
+  const [walkSpawnVersion, setWalkSpawnVersion] = useState(0);
+  const [openDoors, setOpenDoors] = useState<Record<string, boolean>>({});
   const level = doc?.levels[0];
+  const walkSpawn = useMemo(() => level ? findWalkSpawn(level, assets, openDoors) : null, [level, assets, openDoors]);
+  const startWalk = useCallback(() => setWalkStarted(true), []);
+  const pauseWalk = useCallback(() => {
+    setWalkStarted(false);
+    setWalkLocked(false);
+  }, []);
+  const toggleDoor = useCallback((doorId: string) => {
+    setOpenDoors(state => ({ ...state, [doorId]: !(state[doorId] ?? true) }));
+  }, []);
+  const toggleWalkMode = useCallback(() => {
+    if (walkMode) {
+      setWalkMode(false);
+      setWalkStarted(false);
+      setWalkLocked(false);
+      return;
+    }
+    setWalkSpawnVersion(version => version + 1);
+    setWalkMode(true);
+  }, [walkMode]);
   if (!level) return <div className="flex h-full items-center justify-center text-sm text-zinc-400">文档加载中…</div>;
   const button = 'rounded-md px-2.5 py-1.5 text-xs hover:bg-stone-100';
   return (
@@ -354,12 +414,22 @@ export default function Scene3D() {
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
-        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels} hour={hour} showGrid={showGrid} arrowRef={northArrowRef} />
+        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels}
+          hour={hour} showGrid={showGrid} arrowRef={northArrowRef} walkMode={walkMode} openDoors={openDoors}
+          spawnVersion={walkSpawnVersion} walkStarted={walkStarted} onWalkStart={startWalk} onWalkPause={pauseWalk}
+          onWalkLockChange={setWalkLocked} onToggleDoor={toggleDoor} />
       </Canvas>
+      {walkStarted && <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2">
+        <span className="absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 bg-white shadow-[0_0_2px_1px_rgba(0,0,0,0.75)]" />
+        <span className="absolute left-0 top-1/2 h-px w-4 -translate-y-1/2 bg-white shadow-[0_0_2px_1px_rgba(0,0,0,0.75)]" />
+        <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-stone-900/50" />
+      </div>}
       <div className="absolute right-3 top-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-1 rounded-xl border border-stone-200 bg-white/95 p-1 shadow-sm backdrop-blur-sm">
         {showOrientation && <OrientationCompass arrowRef={northArrowRef} />}
         <button className={button} onClick={() => setPreset3d('iso')}>鸟瞰</button>
         <button className={button} onClick={() => setPreset3d('top')}>俯视</button>
+        <button type="button" aria-pressed={walkMode} className={button + (walkMode ? ' bg-stone-800 text-white hover:bg-stone-700' : '')}
+          onClick={toggleWalkMode}>{walkMode ? '退出漫游' : '漫游'}</button>
         <span className="mx-1 h-4 w-px bg-stone-200" />
         <button type="button" aria-pressed={showGrid} className={button + (showGrid ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={toggleGrid}>方格</button>
         <button type="button" aria-pressed={showOrientation} className={button + (showOrientation ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={toggleOrientation}>北向</button>
@@ -376,8 +446,31 @@ export default function Scene3D() {
         </label>
       </div>
       <p className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/75 px-2 py-1 text-[11px] text-stone-500">
-        拖动旋转 · 滚轮缩放 · 点击家具或房间选中 · 点击门开关
+        {walkStarted
+          ? `WASD 移动 · ${walkLocked ? '鼠标转向' : '按住鼠标拖动转向'} · Shift 快走 · E 开关附近房门 · Esc 暂停`
+          : '拖动旋转 · 滚轮缩放 · 点击家具或房间选中 · 点击门开关'}
       </p>
+      {walkMode && !walkStarted && <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-950/35 p-4">
+        <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white px-6 py-5 text-center shadow-xl">
+          <h2 className="text-sm font-semibold text-stone-800">漫游模式</h2>
+          <p className="mt-2 text-xs leading-6 text-stone-600">
+            {walkSpawn ? '点击开始，从入户区域进入户型。' : '当前户型没有可进入的房间，请先绘制房间区域。'}
+          </p>
+          <p className="text-xs leading-6 text-stone-600">W A S D 移动 · 鼠标转向 · Shift 快走</p>
+          <p className="text-xs leading-6 text-stone-600">E 开关附近房门 · Esc 暂停</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <button type="button" disabled={!walkSpawn}
+              className="zaoking-walk-start rounded-md bg-stone-800 px-4 py-2 text-xs font-medium text-white hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-45">
+              开始漫游
+            </button>
+            <button type="button" className="rounded-md border border-stone-300 px-4 py-2 text-xs text-stone-700 hover:bg-stone-50"
+              onClick={toggleWalkMode}>退出</button>
+          </div>
+        </div>
+      </div>}
+      {walkMode && walkStarted && <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-stone-900/75 px-3 py-1 text-[11px] text-white">
+        {walkLocked ? '漫游中 · 按 Esc 暂停' : '漫游中 · 按住鼠标拖动转向 · Esc 暂停'}
+      </div>}
     </div>
   );
 }
