@@ -23,6 +23,39 @@ const Scene3D = dynamic(() => import('@/features/canvas3d/Scene3D'), {
 
 type SaveStatus = 'saved' | 'saving' | 'error' | 'conflict';
 
+type SidebarSide = 'left' | 'right';
+
+function SidebarToggle({ side, expanded, onToggle }: {
+  side: SidebarSide;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const label = `${expanded ? '折叠' : '展开'}${side === 'left' ? '左侧组件栏' : '右侧属性栏'}`;
+  const controls = side === 'left' ? 'editor-asset-sidebar' : 'editor-properties-sidebar';
+  const pointsToward = side === 'left'
+    ? (expanded ? 'left' : 'right')
+    : (expanded ? 'right' : 'left');
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      title={label}
+      onClick={onToggle}
+      className="absolute top-1/2 z-30 hidden h-9 w-7 -translate-y-1/2 place-items-center rounded-md border border-zinc-300 bg-white text-zinc-500 shadow-sm transition hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:grid"
+      style={side === 'left'
+        ? { left: expanded ? 'calc(15rem - 14px)' : '6px' }
+        : { right: expanded ? 'calc(20rem - 14px)' : '6px' }}
+    >
+      <span aria-hidden="true" className="font-mono text-2xl leading-none">
+        {pointsToward === 'left' ? '‹' : '›'}
+      </span>
+    </button>
+  );
+}
+
 const SAVE_TEXT: Record<SaveStatus, { label: string; cls: string }> = {
   saved: { label: '已保存', cls: 'text-emerald-600' },
   saving: { label: '保存中…', cls: 'text-amber-600' },
@@ -274,15 +307,6 @@ export default function EditorShell({ projectId }: { projectId: string }) {
         </div>
 
         <div className="hidden items-center gap-1 md:flex">
-          <button type="button" aria-pressed={!leftSidebarOpen} onClick={() => setLeftSidebarOpen(value => !value)}
-            className={`rounded-md border px-2 py-1.5 text-xs ${leftSidebarOpen ? 'border-zinc-200 text-zinc-600 hover:bg-zinc-50' : 'border-accent/30 bg-accent-soft text-accent'}`}
-            title={leftSidebarOpen ? '折叠左侧组件栏' : '展开左侧组件栏'}>
-            <span aria-hidden="true" className="mr-1">◧</span>{leftSidebarOpen ? '左栏' : '左栏 +'}
-          </button>
-          <button type="button" aria-pressed={!rightSidebarOpen} onClick={() => setRightSidebarOpen(value => !value)}
-            className={`rounded-md border px-2 py-1.5 text-xs ${rightSidebarOpen ? 'border-zinc-200 text-zinc-600 hover:bg-zinc-50' : 'border-accent/30 bg-accent-soft text-accent'}`}
-            title={rightSidebarOpen ? '折叠右侧属性栏' : '展开右侧属性栏'}>
-            <span aria-hidden="true" className="mr-1">◨</span>{rightSidebarOpen ? '右栏' : '右栏 +'}</button>
           <button type="button" aria-pressed={isFullscreen} onClick={() => void toggleFullscreen()}
             className="rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
             title={isFullscreen ? '退出全屏' : '全屏工作'}>
@@ -298,8 +322,8 @@ export default function EditorShell({ projectId }: { projectId: string }) {
       </header>
 
       {/* 主体三栏 */}
-      <div className="flex min-h-0 flex-1">
-        <aside className={`${leftSidebarOpen ? 'md:block' : ''} hidden w-60 shrink-0 border-r border-zinc-200 bg-white`}>
+      <div className="relative flex min-h-0 flex-1">
+        <aside id="editor-asset-sidebar" className={`${leftSidebarOpen ? 'md:block' : ''} hidden w-60 shrink-0 border-r border-zinc-200 bg-white`}>
           <AssetLibrary />
         </aside>
 
@@ -312,7 +336,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           )}
         </main>
 
-        <aside className={`${rightSidebarOpen ? 'md:flex' : ''} hidden w-80 shrink-0 flex-col border-l border-zinc-200 bg-white`}>
+        <aside id="editor-properties-sidebar" className={`${rightSidebarOpen ? 'md:flex' : ''} hidden w-80 shrink-0 flex-col border-l border-zinc-200 bg-white`}>
           <div className="flex shrink-0 border-b border-zinc-200">
             {(
               [
@@ -338,6 +362,16 @@ export default function EditorShell({ projectId }: { projectId: string }) {
             {rightTab === 'stats' && <StatsPanel />}
           </div>
         </aside>
+        <SidebarToggle
+          side="left"
+          expanded={leftSidebarOpen}
+          onToggle={() => setLeftSidebarOpen(value => !value)}
+        />
+        <SidebarToggle
+          side="right"
+          expanded={rightSidebarOpen}
+          onToggle={() => setRightSidebarOpen(value => !value)}
+        />
       </div>
 
       {mobileLibraryOpen && <>
