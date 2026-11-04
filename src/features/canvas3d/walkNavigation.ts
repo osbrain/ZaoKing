@@ -42,7 +42,24 @@ function pointInsideRoomUnion(point: Vec2, level: Level) {
   return level.rooms.some((room) => pointInPolyInclusive(point, room.poly));
 }
 
-function playerFitsInRooms(point: Vec2, level: Level, radius: number) {
+function openingIsPassable(opening: Opening, openDoors: Readonly<Record<string, boolean>>) {
+  return opening.kind === 'sliding'
+    || (opening.kind !== 'window' && openDoors[opening.id] !== false);
+}
+
+function pointInsidePassableThreshold(
+  sample: Vec2,
+  center: Vec2,
+  level: Level,
+  openDoors: Readonly<Record<string, boolean>>,
+  radius: number,
+) {
+  return level.openings.some((opening) => openingIsPassable(opening, openDoors)
+    && openingContainsWalker(opening, center, radius)
+    && pointNearRect(sample, openingBounds(opening), radius));
+}
+
+function playerFitsInRooms(point: Vec2, level: Level, openDoors: Readonly<Record<string, boolean>>, radius: number) {
   if (!level.rooms.length) return true;
   const samples: Vec2[] = [point];
   for (let index = 0; index < 8; index++) {
@@ -52,7 +69,8 @@ function playerFitsInRooms(point: Vec2, level: Level, radius: number) {
       point[1] + Math.sin(angle) * radius,
     ]);
   }
-  return samples.every((sample) => pointInsideRoomUnion(sample, level));
+  return samples.every((sample) => pointInsideRoomUnion(sample, level)
+    || pointInsidePassableThreshold(sample, point, level, openDoors, radius));
 }
 
 function pointHitsFurniture(point: Vec2, level: Level, assets: readonly Asset[], radius: number) {
@@ -84,8 +102,7 @@ function pointHitsWall(point: Vec2, level: Level, openDoors: Readonly<Record<str
     if (!pointNearRect(point, wall, radius)) return false;
     const passableOpening = level.openings.some((opening) => {
       if (!openingOverlapsWall(opening, wall)) return false;
-      const isOpen = opening.kind === 'sliding' || openDoors[opening.id] !== false;
-      return isOpen && openingContainsWalker(opening, point, radius);
+      return openingIsPassable(opening, openDoors) && openingContainsWalker(opening, point, radius);
     });
     return !passableOpening;
   });
@@ -98,7 +115,7 @@ export function canWalkTo(
   openDoors: Readonly<Record<string, boolean>> = {},
   radius = WALKER_RADIUS_MM,
 ) {
-  return playerFitsInRooms(point, level, radius)
+  return playerFitsInRooms(point, level, openDoors, radius)
     && !pointHitsWall(point, level, openDoors, radius)
     && !pointHitsClosedOpening(point, level, openDoors, radius)
     && !pointHitsFurniture(point, level, assets, radius);

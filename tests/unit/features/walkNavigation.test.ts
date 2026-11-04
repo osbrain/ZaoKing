@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildBlankDocument } from '@/core/seed';
-import { resolveAssetByQuery } from '@/core/assets';
+import { buildBlankDocument, buildSeedDocument } from '@/core/seed';
+import { CATALOG, resolveAssetByQuery } from '@/core/assets';
 import { canWalkTo, findWalkSpawn, nearestWalkDoor } from '@/features/canvas3d/walkNavigation';
 
 describe('3D walk navigation', () => {
@@ -53,5 +53,17 @@ describe('3D walk navigation', () => {
     expect(canWalkTo(level, [2500, 1450], [], { 'room-door': false })).toBe(false);
     expect(nearestWalkDoor(level, [2600, 1450])?.id).toBe('room-door');
     expect(nearestWalkDoor(level, [4800, 1450])).toBeNull();
+  });
+
+  it('allows the player footprint through a bedroom door between room polygons separated by wall thickness', () => {
+    const level = buildSeedDocument().levels[0];
+    const bedroomDoor = level.openings.find((opening) => opening.id === 'door1')!;
+    const x = (bedroomDoor.rect[0] + bedroomDoor.rect[2]) / 2;
+    const y = (bedroomDoor.rect[1] + bedroomDoor.rect[3]) / 2;
+
+    for (let playerX = x - 320; playerX <= x + 320; playerX += 40) {
+      expect(canWalkTo(level, [playerX, y], CATALOG)).toBe(true);
+    }
+    expect(canWalkTo(level, [x, y], CATALOG, { [bedroomDoor.id]: false })).toBe(false);
   });
 });
