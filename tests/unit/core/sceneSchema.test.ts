@@ -67,6 +67,28 @@ describe('SceneDocumentSchema', () => {
     if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'color')).toBe(true);
   });
 
+  it('validates optional furniture unit prices', () => {
+    const document = buildSeedDocument();
+    document.levels[0].instances[0].unitPrice = 1234.56;
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+
+    document.levels[0].instances[0].unitPrice = -1;
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+
+    document.levels[0].instances[0].unitPrice = 100_000_001;
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+  });
+
+  it('rejects material snapshot prices above the editable limit', () => {
+    const document = buildBlankDocument();
+    document.materialSnapshots = [{
+      id: 'tile800', name: '800 地砖', price: 1_000_001, sw: '#cbc3b7',
+      render: { pattern: 'tile', tileMm: [800, 800] },
+    }];
+
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+  });
+
   it('rejects cabinet open-bay counts greater than the partition count', () => {
     const document = buildBlankDocument();
     document.assets = [{

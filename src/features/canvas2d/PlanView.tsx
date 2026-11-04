@@ -33,6 +33,8 @@ export default function PlanView() {
   const wallPreset = useEditorStore((s) => s.wallPreset);
   const showGrid = useEditorStore((s) => s.showGrid);
   const showOrientation = useEditorStore((s) => s.showOrientation);
+  const showRoomNames = useEditorStore((s) => s.showRoomNames);
+  const showFurniture = useEditorStore((s) => s.showFurniture);
   const showToast = useEditorStore((s) => s.showToast);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -395,8 +397,8 @@ export default function PlanView() {
         <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting} />
         <g dangerouslySetInnerHTML={{ __html: openingsSvg(level) }} pointerEvents="none" />
         <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting} />
-        <FurnLayer assets={assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />
-        <LabelsLayer level={level} materials={materials} />
+        {showFurniture && <FurnLayer assets={assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />}
+        {showRoomNames && <LabelsLayer level={level} materials={materials} />}
         <g dangerouslySetInnerHTML={{ __html: dimsSvg(level) }} pointerEvents="none" />
         {/* 绘制预览 */}
         {wallDraft && Math.hypot(wallDraft.b[0] - wallDraft.a[0], wallDraft.b[1] - wallDraft.a[1]) > 10 && (() => {
@@ -429,7 +431,7 @@ export default function PlanView() {
           />
         )}
         <g data-export-ignore="true">
-          <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
+          {(showFurniture || selection?.kind !== 'furn') && <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />}
         </g>
       </svg>
 
@@ -479,6 +481,14 @@ export default function PlanView() {
           <button type="button" aria-pressed={showOrientation} onClick={() => useEditorStore.getState().toggleOrientation()}
             className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showOrientation ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
             北向 {showOrientation ? '开' : '关'}
+          </button>
+          <button type="button" aria-pressed={showRoomNames} onClick={() => useEditorStore.getState().toggleRoomNames()}
+            className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showRoomNames ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
+            房间名称 {showRoomNames ? '开' : '关'}
+          </button>
+          <button type="button" aria-pressed={showFurniture} onClick={() => useEditorStore.getState().toggleFurniture()}
+            className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showFurniture ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
+            家具组件 {showFurniture ? '开' : '关'}
           </button>
         </div>
       </div>

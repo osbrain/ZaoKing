@@ -4,6 +4,7 @@ import { AssetDefinitionSchema, CustomAssetSchema } from './assetSchema';
 import { assetCatalog, materialCatalog } from './assets';
 import { MaterialSchema } from './materialSchema';
 import { HexColorSchema } from './schemaPrimitives';
+import { MAX_FURNITURE_UNIT_PRICE } from './pricingLimits';
 
 const MAX_COORDINATE_MM = 1_000_000;
 const coordinate = z.number().finite().min(-MAX_COORDINATE_MM).max(MAX_COORDINATE_MM);
@@ -83,6 +84,7 @@ const componentInstanceSchema = z.object({
     drawers: z.number().int().min(1).max(8).optional(),
     seats: z.number().int().min(1).max(5).optional(),
   }).strict().refine((parameters) => Object.keys(parameters).length > 0, 'At least one parameter override is required').optional(),
+  unitPrice: z.number().finite().min(0).max(MAX_FURNITURE_UNIT_PRICE).optional(),
   color: HexColorSchema.optional(),
   locked: z.boolean().optional(),
 }).strict();

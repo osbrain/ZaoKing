@@ -27,6 +27,8 @@ interface EditorState {
   preset3d: { kind: 'iso' | 'top'; n: number };
   showGrid: boolean;
   showOrientation: boolean;
+  showRoomNames: boolean;
+  showFurniture: boolean;
 
   setViewMode: (m: '2d' | '3d') => void;
   setCamera: (c: Camera) => void;
@@ -39,6 +41,8 @@ interface EditorState {
   setPreset3d: (kind: 'iso' | 'top') => void;
   toggleGrid: () => void;
   toggleOrientation: () => void;
+  toggleRoomNames: () => void;
+  toggleFurniture: () => void;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -53,6 +57,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   preset3d: { kind: 'iso', n: 0 },
   showGrid: true,
   showOrientation: true,
+  showRoomNames: true,
+  showFurniture: true,
 
   setViewMode: (m) => set({ viewMode: m }),
   setCamera: (c) => set({ camera: c }),
@@ -73,4 +79,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setPreset3d: (kind) => set({ preset3d: { kind, n: get().preset3d.n + 1 } }),
   toggleGrid: () => set((state) => ({ showGrid: !state.showGrid })),
   toggleOrientation: () => set((state) => ({ showOrientation: !state.showOrientation })),
+  toggleRoomNames: () => set((state) => ({ showRoomNames: !state.showRoomNames })),
+  toggleFurniture: () => set((state) => ({ showFurniture: !state.showFurniture })),
 }));

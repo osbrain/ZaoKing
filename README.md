@@ -31,8 +31,10 @@ Inspect room structure, furniture placement, materials, and spatial checks in a 
 ## What You Can Do
 
 - **Create and edit floor plans.** Work with rooms, walls, doors, windows, openings, dimensions, a toggleable grid, and orientation indicators.
+- **Control the canvas display.** Toggle room labels and furniture visibility in both 2D and 3D views.
 - **Move between 2D and 3D.** Edit a plan and inspect the corresponding room layout in a 3D scene backed by the same design data.
 - **Arrange and customize furniture.** Add catalog components, place and rotate them, adjust width, depth, and height, and edit supported component parameters.
+- **Estimate a project budget.** Set project-specific floor-material prices and actual unit prices for placed furniture; the estimate marks unpriced furniture instead of silently counting it as free.
 - **Ask the AI assistant to make changes.** Describe additions, deletions, replacements, moves, size changes, colors, or floor materials in natural language.
 - **Import a floor-plan image.** Use a configured vision model to create a draft from an uploaded screenshot, then review and edit the recognized geometry.
 - **Check a layout.** Surface selected furniture clearance and door-swing conflicts while arranging a room.
@@ -43,7 +45,7 @@ AI recognition and layout checks are design aids. They do not certify measuremen
 
 ## How the Design Data Works
 
-The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. The 2D canvas and the Three.js scene render that document in their respective views.
+The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. Placed furniture can carry an instance-specific unit price, and material snapshots can retain project-specific prices. The 2D canvas and the Three.js scene render the same geometry while sharing editor display controls.
 
 The main interaction flow is:
 
@@ -59,6 +61,10 @@ flowchart LR
 ```
 
 For AI changes, the server sends the current room and component context to a compatible language model. The model can request a defined tool such as adding, resizing, deleting, or recoloring an item. The application resolves that request against the asset catalog, validates supported fields and layout constraints, then applies the resulting operation. Screenshot recognition is a separate vision workflow that returns a draft for user review.
+
+## Budget Estimate Limits
+
+The estimate combines floor-material area at the project-configured price per square meter (including the current 5% material allowance) with furniture instances that have an entered unit price. Unpriced furniture is listed separately and excluded from the subtotal. Built-in material prices start as editable references, and the component catalog is not connected to live retailer SKUs. Labor, accessories, delivery, installation, discounts, and taxes are outside the estimate.
 
 ## Technology
 

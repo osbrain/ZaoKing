@@ -64,6 +64,8 @@ export interface ComponentInstance {
   size?: { w?: number; d?: number; h?: number };
   /** 每个实例单独覆盖资产的结构参数（如层板、抽屉或座位数量） */
   parameters?: Partial<CustomGeometry['parameters']>;
+  /** 本家具实例的实际商品单价（元）；未设置时不计入预算小计。 */
+  unitPrice?: number;
   /** 颜色覆盖（2D 图例着色 / 3D 占位体着色） */
   color?: string;
   locked?: boolean;

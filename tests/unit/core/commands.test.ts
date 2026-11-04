@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyCmds } from '@/core/commands';
 import { buildBlankDocument } from '@/core/seed';
+import { materialById } from '@/core/assets';
 
 describe('level-scoped commands', () => {
   it('preserves the current single-level command API', () => {
@@ -66,5 +67,42 @@ describe('level-scoped commands', () => {
     }]);
 
     expect(updated.levels[0].instances[0].parameters).toEqual({ compartments: 1, openCompartments: 1 });
+  });
+
+  it('sets and clears a placed component price without mutating the source document', () => {
+    const document = buildBlankDocument();
+    document.levels[0].instances = [{ id: 'sofa-1', assetId: 'sofa', t: { x: 0, y: 0, rot: 0 } }];
+
+    const priced = applyCmds(document, [{ type: 'setInstancePrice', id: 'sofa-1', unitPrice: 2988.5 }]);
+    const cleared = applyCmds(priced, [{ type: 'setInstancePrice', id: 'sofa-1', unitPrice: undefined }]);
+
+    expect(priced.levels[0].instances[0].unitPrice).toBe(2988.5);
+    expect(document.levels[0].instances[0].unitPrice).toBeUndefined();
+    expect(cleared.levels[0].instances[0].unitPrice).toBeUndefined();
+  });
+
+  it('rejects invalid furniture prices at the command boundary', () => {
+    const document = buildBlankDocument();
+    document.levels[0].instances = [{ id: 'sofa-1', assetId: 'sofa', t: { x: 0, y: 0, rot: 0 } }];
+
+    for (const unitPrice of [-1, Number.NaN, Number.POSITIVE_INFINITY, 100_000_001]) {
+      expect(() => applyCmds(document, [{ type: 'setInstancePrice', id: 'sofa-1', unitPrice }])).toThrow(/家具单价/);
+    }
+    expect(() => applyCmds(document, [{ type: 'setInstancePrice', id: 'sofa-1', unitPrice: 100_000_000 }])).not.toThrow();
+  });
+
+  it('stores a project material price override in a snapshot', () => {
+    const document = buildBlankDocument();
+    const updated = applyCmds(document, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 235.75 }]);
+
+    expect(materialById('tile800', updated.materialSnapshots).price).toBe(235.75);
+    expect(materialById('tile800').price).toBe(220);
+    expect(document.materialSnapshots).toBeUndefined();
+  });
+
+  it('rejects material prices above the editable limit', () => {
+    const document = buildBlankDocument();
+    expect(() => applyCmds(document, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 1_000_001 }])).toThrow(/材质单价/);
+    expect(() => applyCmds(document, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 1_000_000 }])).not.toThrow();
   });
 });

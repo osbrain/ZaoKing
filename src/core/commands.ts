@@ -6,13 +6,15 @@
 
 import type { ComponentInstance, CustomAsset, Opening, Room, SceneDocument, Wall } from './types';
 import { CustomAssetSchema } from './assetSchema';
-import { assetById } from './assets';
+import { assetById, materialCatalog } from './assets';
+import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from './pricingLimits';
 
 type LevelCmd =
   | { levelId?: string; type: 'place'; inst: ComponentInstance }
   | { levelId?: string; type: 'delete'; id: string }
   | { levelId?: string; type: 'move'; id: string; t: { x: number; y: number; rot: number } }
   | { levelId?: string; type: 'resize'; id: string; size: { w?: number; d?: number; h?: number } }
+  | { levelId?: string; type: 'setInstancePrice'; id: string; unitPrice: number | undefined }
   | { levelId?: string; type: 'setParameters'; id: string; parameters: NonNullable<ComponentInstance['parameters']> }
   | { levelId?: string; type: 'setColor'; id: string; color: string }
   | { levelId?: string; type: 'replaceAsset'; id: string; assetId: string }
@@ -36,15 +38,21 @@ type AssetCmd = (
   | { type: 'deleteAsset'; id: string }
 ) & { levelId?: never };
 
-export type Cmd = LevelCmd | AssetCmd;
+type DocumentCmd = { type: 'setMaterialPrice'; materialId: string; price: number } & { levelId?: never };
+
+export type Cmd = LevelCmd | AssetCmd | DocumentCmd;
 
 function isAssetCommand(command: Cmd): command is AssetCmd {
   return command.type === 'addAsset' || command.type === 'updateAsset' || command.type === 'deleteAsset';
 }
 
+function isDocumentCommand(command: Cmd): command is DocumentCmd {
+  return command.type === 'setMaterialPrice';
+}
+
 export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
   if (!cmds.length) return doc;
-  const levelCommands = cmds.filter((command): command is LevelCmd => !isAssetCommand(command));
+  const levelCommands = cmds.filter((command): command is LevelCmd => !isAssetCommand(command) && !isDocumentCommand(command));
   if (doc.levels.length > 1 && levelCommands.some((command) => !command.levelId)) {
     throw new Error('Commands must target a level when the document has multiple levels');
   }
@@ -71,6 +79,18 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
       }
       continue;
     }
+    if (isDocumentCommand(c)) {
+      if (!Number.isFinite(c.price) || c.price < 0 || c.price > MAX_MATERIAL_PRICE_PER_SQM) {
+        throw new Error(`材质单价必须在 0 至 ${MAX_MATERIAL_PRICE_PER_SQM.toLocaleString('en-US')} 元之间`);
+      }
+      const material = materialCatalog(d.materialSnapshots).find((item) => item.id === c.materialId);
+      if (!material) throw new Error('材质不存在');
+      d.materialSnapshots = [
+        ...(d.materialSnapshots ?? []).filter((item) => item.id !== c.materialId),
+        { ...material, price: Math.round(c.price * 100) / 100 },
+      ];
+      continue;
+    }
     for (const lv of d.levels) {
       if (c.levelId && c.levelId !== lv.id) continue;
       switch (c.type) {
@@ -88,6 +108,14 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
         case 'resize': {
           const i = lv.instances.find((x) => x.id === c.id);
           if (i) i.size = { ...i.size, ...c.size };
+          break;
+        }
+        case 'setInstancePrice': {
+          if (c.unitPrice !== undefined && (!Number.isFinite(c.unitPrice) || c.unitPrice < 0 || c.unitPrice > MAX_FURNITURE_UNIT_PRICE)) {
+            throw new Error(`家具单价必须在 0 至 ${MAX_FURNITURE_UNIT_PRICE.toLocaleString('en-US')} 元之间`);
+          }
+          const i = lv.instances.find((x) => x.id === c.id);
+          if (i) i.unitPrice = c.unitPrice;
           break;
         }
         case 'setParameters': {

@@ -9,6 +9,7 @@ import { assetById, materialById, materialCatalog } from '@/core/assets';
 import { instanceRef, uid, type Opening, type Wall } from '@/core/types';
 import { analyzeLevelLayout, polyArea } from '@/core/geometry';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
+import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from '@/core/pricingLimits';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
 
@@ -45,6 +46,52 @@ function NumberField({
         inputMode="numeric"
         className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
       />
+    </label>
+  );
+}
+
+function MoneyField({ label, value, onCommit, allowUnset = false, hint, max = MAX_FURNITURE_UNIT_PRICE }: {
+  label: string;
+  value: number | undefined;
+  onCommit: (value: number | undefined) => void;
+  allowUnset?: boolean;
+  hint?: string;
+  max?: number;
+}) {
+  const [text, setText] = useState(value === undefined ? '' : value.toFixed(2));
+  useEffect(() => setText(value === undefined ? '' : value.toFixed(2)), [value]);
+  const commit = () => {
+    if (!text.trim()) {
+      if (allowUnset) onCommit(undefined);
+      else setText(value === undefined ? '' : value.toFixed(2));
+      return;
+    }
+    const amount = Number(text);
+    if (!Number.isFinite(amount) || amount < 0 || amount > max) {
+      setText(value === undefined ? '' : value.toFixed(2));
+      return;
+    }
+    const rounded = Math.round(amount * 100) / 100;
+    if (rounded !== value) onCommit(rounded);
+    else setText(rounded.toFixed(2));
+  };
+  return (
+    <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
+      {label}
+      <input
+        type="number"
+        min={0}
+        max={max}
+        step="0.01"
+        inputMode="decimal"
+        value={text}
+        placeholder={allowUnset ? '未设置' : undefined}
+        onChange={(event) => setText(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }}
+        className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+      />
+      {hint && <span className="text-[10px] leading-relaxed text-zinc-400">{hint}</span>}
     </label>
   );
 }
@@ -93,6 +140,9 @@ export function PropsPanel() {
           <NumberField min={10} max={20000} label="高 (mm)" value={ref.h}
             onCommit={(h) => run('调整高度', [{ levelId: level.id, type: 'resize', id: inst.id, size: { h } }])} />
         </div>
+        <MoneyField label="本件单价（元）" value={inst.unitPrice} allowUnset
+          hint="按实际商品填写；未设置时不计入预算小计。"
+          onCommit={(unitPrice) => run('设置家具单价', [{ levelId: level.id, type: 'setInstancePrice', id: inst.id, unitPrice }])} />
         {asset?.type === 'custom' && customParameters && Object.keys(customParameters).length > 0 && (
           <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3">
             {([
@@ -196,6 +246,9 @@ export function PropsPanel() {
             ))}
           </div>
         </div>
+        <MoneyField label="项目单价（元/m²）" value={mat.price} max={MAX_MATERIAL_PRICE_PER_SQM}
+          hint="此价格应用到项目中所有使用该材质的房间。"
+          onCommit={(price) => { if (price !== undefined) run('调整材质单价', [{ type: 'setMaterialPrice', materialId: mat.id, price }]); }} />
         <button
           className="w-full rounded-md border border-red-200 py-1.5 text-xs text-red-600 hover:bg-red-50"
           onClick={() => {
@@ -364,13 +417,34 @@ export function StatsPanel() {
     const a = polyArea(r.poly);
     byMat.set(r.floorMaterialId, (byMat.get(r.floorMaterialId) ?? 0) + a);
   }
-  let totalCost = 0;
+  let floorCost = 0;
   const matRows = [...byMat.entries()].map(([id, area]) => {
     const m = materialById(id, materials);
     const cost = area * m.price * 1.05;
-    totalCost += cost;
+    floorCost += cost;
     return { m, area, cost };
   });
+
+  const pricedItems = new Map<string, { name: string; quantity: number; unitPrice: number; cost: number }>();
+  const unpricedItems = new Map<string, { name: string; quantity: number }>();
+  for (const instance of level.instances) {
+    const name = assetById(instance.assetId, assets)?.name ?? '未知组件';
+    if (instance.unitPrice === undefined) {
+      const item = unpricedItems.get(instance.assetId) ?? { name, quantity: 0 };
+      item.quantity += 1;
+      unpricedItems.set(instance.assetId, item);
+      continue;
+    }
+    const key = `${instance.assetId}:${instance.unitPrice.toFixed(2)}`;
+    const item = pricedItems.get(key) ?? { name, quantity: 0, unitPrice: instance.unitPrice, cost: 0 };
+    item.quantity += 1;
+    item.cost += instance.unitPrice;
+    pricedItems.set(key, item);
+  }
+  const furnitureRows = [...pricedItems.values()];
+  const furnitureCost = furnitureRows.reduce((total, item) => total + item.cost, 0);
+  const totalCost = floorCost + furnitureCost;
+  const unpricedFurnitureCount = [...unpricedItems.values()].reduce((total, item) => total + item.quantity, 0);
 
   return (
     <div className="space-y-4 p-4">
@@ -444,8 +518,29 @@ export function StatsPanel() {
           </tbody>
         </table>
         <div className="mt-2 flex justify-between text-sm font-medium">
-          <span>合计</span>
-          <span className="tabular-nums text-accent">¥{Math.round(totalCost).toLocaleString()}</span>
+          <span>地面材料小计</span>
+          <span className="tabular-nums">¥{Math.round(floorCost).toLocaleString()}</span>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-400">家具商品估算</h3>
+        {furnitureRows.length > 0 ? <table className="w-full text-xs">
+          <tbody>
+            {furnitureRows.map((item, index) => (
+              <tr key={`${item.name}-${item.unitPrice}-${index}`} className="border-b border-dashed border-zinc-100">
+                <td className="py-1.5">{item.name} × {item.quantity}<span className="ml-1 text-[10px] text-zinc-400">¥{item.unitPrice.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/件</span></td>
+                <td className="py-1.5 text-right tabular-nums">¥{item.cost.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table> : <p className="text-[11px] text-zinc-400">尚未填写家具商品单价。</p>}
+        {unpricedFurnitureCount > 0 && <div className="mt-2 rounded-md bg-amber-50 px-2.5 py-2 text-[10px] leading-relaxed text-amber-900">
+          {unpricedFurnitureCount} 件家具未设置单价，未计入小计：{[...unpricedItems.values()].map((item) => `${item.name} × ${item.quantity}`).join('、')}
+        </div>}
+        <div className="mt-3 flex justify-between border-t border-zinc-100 pt-3 text-sm font-semibold">
+          <span>已计价小计</span>
+          <span className="tabular-nums text-accent">¥{totalCost.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
       </section>
 
@@ -459,7 +554,7 @@ export function StatsPanel() {
           <p className="text-[11px] text-zinc-400">墙段数</p>
         </div>
       </section>
-      <p className="text-[10px] leading-relaxed text-zinc-400">当前组件库未关联真实商品 SKU；此处金额仅为地面材料估算，不含家具商品、人工、辅料、运输及安装。</p>
+      <p className="text-[10px] leading-relaxed text-zinc-400">地面默认单价为参考估价，可在房间属性中调整；家具单价需按实际商品填写。当前未关联电商 SKU，金额不含人工、辅料、运输及安装。</p>
     </div>
   );
 }

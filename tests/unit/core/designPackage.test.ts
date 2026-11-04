@@ -9,7 +9,9 @@ import { executeOps } from '@/core/ops';
 describe('portable design packages', () => {
   it('round-trips room layout, used asset definitions, and material render parameters', () => {
     const source = buildSeedDocument('可移植方案');
-    const exported = createDesignPackage(source);
+    source.levels[0].instances[0].unitPrice = 1234.56;
+    const withMaterialPrice = applyCmds(source, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 237.5 }]);
+    const exported = createDesignPackage(withMaterialPrice);
 
     expect(exported.format).toBe(DESIGN_PACKAGE_FORMAT);
     expect(exported.document.assetSnapshots).toBeUndefined();
@@ -17,10 +19,12 @@ describe('portable design packages', () => {
     expect(exported.materialManifest.some(material => material.id === 'tile800')).toBe(true);
 
     const imported = parseDesignPackage(JSON.stringify(exported));
-    expect(imported.document.levels).toEqual(source.levels);
+    expect(imported.document.levels).toEqual(withMaterialPrice.levels);
     expect(imported.document.assetSnapshots?.length).toBe(exported.assetManifest.length);
     expect(assetById('a1_5', imported.document.assetSnapshots)).toEqual(assetById('a1_5'));
     expect(materialById('tile800', imported.document.materialSnapshots).render).toEqual(materialById('tile800').render);
+    expect(imported.document.levels[0].instances[0].unitPrice).toBe(1234.56);
+    expect(materialById('tile800', imported.document.materialSnapshots).price).toBe(237.5);
     expect(SceneDocumentSchema.safeParse(imported.document).success).toBe(true);
   });
 

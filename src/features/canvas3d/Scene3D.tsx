@@ -279,7 +279,7 @@ function Lighting({ level, hour }: { level: Level; hour: number }) {
   </>;
 }
 
-function DetailedScene({ level, assets, materials, cutHeight, labels, hour, showGrid, arrowRef,
+function DetailedScene({ level, assets, materials, cutHeight, showRoomNames, showFurniture, hour, showGrid, arrowRef,
   walkMode, openDoors, spawnVersion, onWalkLockChange, onToggleDoor,
   walkStarted, onWalkStart, onWalkPause,
 }: {
@@ -287,7 +287,8 @@ function DetailedScene({ level, assets, materials, cutHeight, labels, hour, show
   assets?: readonly Asset[];
   materials: readonly Material[];
   cutHeight: number;
-  labels: boolean;
+  showRoomNames: boolean;
+  showFurniture: boolean;
   hour: number;
   showGrid: boolean;
   arrowRef: RefObject<SVGGElement>;
@@ -353,10 +354,10 @@ function DetailedScene({ level, assets, materials, cutHeight, labels, hour, show
     })()}
     {models && <>
       {level.rooms.map(room => <RoomFloor key={room.id} room={room} models={models} cutHeight={cutHeight} materials={materials} />)}
-      {level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} asset={assetById(inst.assetId, assets)} />)}
+      {showFurniture && level.instances.map(inst => <Furniture key={inst.id} inst={inst} models={models} asset={assetById(inst.assetId, assets)} />)}
     </>}
     <Architecture level={level} cutHeight={cutHeight} openDoors={openDoors} onToggleDoor={onToggleDoor} />
-    {labels && <RoomLabels level={level} />}
+    {showRoomNames && <RoomLabels level={level} />}
     {walkMode
       ? <WalkModeControls level={level} assets={assets ?? []} openDoors={openDoors} spawnVersion={spawnVersion}
           active={walkStarted} onStart={onWalkStart} onPause={onWalkPause}
@@ -375,11 +376,12 @@ export default function Scene3D() {
   const setPreset3d = useEditorStore(s => s.setPreset3d);
   const showGrid = useEditorStore(s => s.showGrid);
   const showOrientation = useEditorStore(s => s.showOrientation);
+  const showRoomNames = useEditorStore(s => s.showRoomNames);
+  const showFurniture = useEditorStore(s => s.showFurniture);
   const toggleGrid = useEditorStore(s => s.toggleGrid);
   const toggleOrientation = useEditorStore(s => s.toggleOrientation);
   const northArrowRef = useRef<SVGGElement>(null);
   const [cutHeight, setCutHeight] = useState(2800);
-  const [labels, setLabels] = useState(true);
   const [hour, setHour] = useState(10);
   const [walkMode, setWalkMode] = useState(false);
   const [walkStarted, setWalkStarted] = useState(false);
@@ -414,7 +416,7 @@ export default function Scene3D() {
         gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
-        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels}
+        <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} showRoomNames={showRoomNames} showFurniture={showFurniture}
           hour={hour} showGrid={showGrid} arrowRef={northArrowRef} walkMode={walkMode} openDoors={openDoors}
           spawnVersion={walkSpawnVersion} walkStarted={walkStarted} onWalkStart={startWalk} onWalkPause={pauseWalk}
           onWalkLockChange={setWalkLocked} onToggleDoor={toggleDoor} />
@@ -433,12 +435,13 @@ export default function Scene3D() {
         <span className="mx-1 h-4 w-px bg-stone-200" />
         <button type="button" aria-pressed={showGrid} className={button + (showGrid ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={toggleGrid}>方格</button>
         <button type="button" aria-pressed={showOrientation} className={button + (showOrientation ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={toggleOrientation}>北向</button>
+        <button type="button" aria-pressed={showRoomNames} className={button + (showRoomNames ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={() => useEditorStore.getState().toggleRoomNames()}>房间名</button>
+        <button type="button" aria-pressed={showFurniture} className={button + (showFurniture ? ' bg-stone-800 text-white hover:bg-stone-700' : '')} onClick={() => useEditorStore.getState().toggleFurniture()}>家具</button>
         <span className="mx-1 h-4 w-px bg-stone-200" />
         {[[2800, '全高'], [1200, '半墙'], [300, '低墙']].map(([height, title]) => (
           <button key={height} className={button + (cutHeight === height ? ' bg-stone-800 text-white hover:bg-stone-700' : '')}
             onClick={() => setCutHeight(Number(height))}>{title}</button>
         ))}
-        <button className={button + (labels ? ' text-accent' : '')} onClick={() => setLabels(value => !value)}>标签</button>
         <label className="mx-2 flex items-center gap-2 text-[11px] text-stone-500">日照
           <input aria-label="日照时间" type="range" min="7" max="18" step="0.25" value={hour}
             onChange={event => setHour(Number(event.target.value))} className="w-20 accent-stone-600" />
