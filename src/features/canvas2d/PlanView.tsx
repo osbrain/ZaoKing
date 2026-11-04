@@ -380,6 +380,7 @@ export default function PlanView() {
     <div ref={wrapRef} className="relative h-full w-full overflow-hidden bg-[#f7f4ee]">
       <svg
         ref={svgRef}
+        data-editor-export="plan"
         width={size.w}
         height={size.h}
         viewBox={vb}
@@ -403,7 +404,7 @@ export default function PlanView() {
           const r = wallRectFromSegment(wallDraft.a, wallDraft.b, p.thickness);
           const len = Math.round(Math.hypot(wallDraft.b[0] - wallDraft.a[0], wallDraft.b[1] - wallDraft.a[1]));
           return (
-            <g pointerEvents="none">
+            <g data-export-ignore="true" pointerEvents="none">
               <rect x={r.x0} y={r.y0} width={r.x1 - r.x0} height={r.y1 - r.y0} fill="rgba(181,101,58,.35)" stroke="#b5653a" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
               <text x={(r.x0 + r.x1) / 2} y={(r.y0 + r.y1) / 2 - 150} fontSize={200} textAnchor="middle" fill="#b5653a" fontWeight={600} stroke="#f7f4ee" strokeWidth={40} paintOrder="stroke">{len}</text>
             </g>
@@ -412,7 +413,7 @@ export default function PlanView() {
         {roomDraft && (() => {
           const r = normRect(roomDraft.a, roomDraft.b);
           return (
-            <g pointerEvents="none">
+            <g data-export-ignore="true" pointerEvents="none">
               <rect x={r.x0} y={r.y0} width={r.x1 - r.x0} height={r.y1 - r.y0} fill="rgba(47,93,98,.15)" stroke="#2f5d62" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
               <text x={(r.x0 + r.x1) / 2} y={(r.y0 + r.y1) / 2} fontSize={220} textAnchor="middle" fill="#2f5d62" fontWeight={600} stroke="#f7f4ee" strokeWidth={40} paintOrder="stroke">
                 {((r.x1 - r.x0) / 1000).toFixed(1)} × {((r.y1 - r.y0) / 1000).toFixed(1)} m
@@ -421,13 +422,15 @@ export default function PlanView() {
           );
         })()}
         {openingPreview && (
-          <rect
+          <rect data-export-ignore="true"
             x={openingPreview.rect[0]} y={openingPreview.rect[1]}
             width={openingPreview.rect[2] - openingPreview.rect[0]} height={openingPreview.rect[3] - openingPreview.rect[1]}
             fill="rgba(79,115,148,.4)" stroke="#4f7394" strokeWidth={1.5} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" pointerEvents="none"
           />
         )}
-        <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
+        <g data-export-ignore="true">
+          <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />
+        </g>
       </svg>
 
       {/* 工具条 */}

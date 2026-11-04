@@ -51,7 +51,49 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   const [loadedProject, setLoadedProject] = useState<string | null>(null);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [mobileLibraryOpen, setMobileLibraryOpen] = useState(false);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const shellRef = useRef<HTMLDivElement>(null);
   const autosaverRef = useRef<ReturnType<typeof createAutosaver> | null>(null);
+
+  useEffect(() => {
+    const updateFullscreen = () => setIsFullscreen(window.document.fullscreenElement === shellRef.current);
+    window.document.addEventListener('fullscreenchange', updateFullscreen);
+    return () => window.document.removeEventListener('fullscreenchange', updateFullscreen);
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen || window.document.fullscreenElement) return;
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', exitOnEscape);
+    return () => window.removeEventListener('keydown', exitOnEscape);
+  }, [isFullscreen]);
+
+  const toggleFullscreen = async () => {
+    const shell = shellRef.current;
+    if (isFullscreen) {
+      if (window.document.fullscreenElement === shell && typeof window.document.exitFullscreen === 'function') {
+        await window.document.exitFullscreen();
+      } else {
+        setIsFullscreen(false);
+      }
+      return;
+    }
+    try {
+      if (shell && window.document.fullscreenEnabled && typeof shell.requestFullscreen === 'function') {
+        await shell.requestFullscreen();
+      } else {
+        setIsFullscreen(true);
+      }
+    } catch {
+      setIsFullscreen(true);
+    }
+  };
 
   /* 加载文档 */
   useEffect(() => {
@@ -184,7 +226,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-zinc-100">
+    <div ref={shellRef} className={`${isFullscreen ? 'fixed inset-0 z-[70]' : 'h-dvh'} flex flex-col bg-zinc-100`}>
       {/* 顶栏 */}
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-zinc-200 bg-white px-2 sm:gap-3 sm:px-3">
         <Link href="/" className="rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100" title="返回项目列表">
@@ -231,14 +273,33 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           </button>
         </div>
 
+        <div className="hidden items-center gap-1 md:flex">
+          <button type="button" aria-pressed={!leftSidebarOpen} onClick={() => setLeftSidebarOpen(value => !value)}
+            className={`rounded-md border px-2 py-1.5 text-xs ${leftSidebarOpen ? 'border-zinc-200 text-zinc-600 hover:bg-zinc-50' : 'border-accent/30 bg-accent-soft text-accent'}`}
+            title={leftSidebarOpen ? '折叠左侧组件栏' : '展开左侧组件栏'}>
+            <span aria-hidden="true" className="mr-1">◧</span>{leftSidebarOpen ? '左栏' : '左栏 +'}
+          </button>
+          <button type="button" aria-pressed={!rightSidebarOpen} onClick={() => setRightSidebarOpen(value => !value)}
+            className={`rounded-md border px-2 py-1.5 text-xs ${rightSidebarOpen ? 'border-zinc-200 text-zinc-600 hover:bg-zinc-50' : 'border-accent/30 bg-accent-soft text-accent'}`}
+            title={rightSidebarOpen ? '折叠右侧属性栏' : '展开右侧属性栏'}>
+            <span aria-hidden="true" className="mr-1">◨</span>{rightSidebarOpen ? '右栏' : '右栏 +'}</button>
+          <button type="button" aria-pressed={isFullscreen} onClick={() => void toggleFullscreen()}
+            className="rounded-md border border-zinc-200 px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
+            title={isFullscreen ? '退出全屏' : '全屏工作'}>
+            <span aria-hidden="true" className="mr-1">⛶</span>{isFullscreen ? '退出全屏' : '全屏'}
+          </button>
+        </div>
+
         <div className="flex-1" />
-        <DesignPackageControls document={doc} />
+        <div className="relative">
+          <DesignPackageControls document={doc} viewMode={viewMode} />
+        </div>
         <span className={`text-xs font-medium ${SAVE_TEXT[saveStatus].cls}`}>{SAVE_TEXT[saveStatus].label}</span>
       </header>
 
       {/* 主体三栏 */}
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-60 shrink-0 border-r border-zinc-200 bg-white md:block">
+        <aside className={`${leftSidebarOpen ? 'md:block' : ''} hidden w-60 shrink-0 border-r border-zinc-200 bg-white`}>
           <AssetLibrary />
         </aside>
 
@@ -251,7 +312,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           )}
         </main>
 
-        <aside className="hidden w-80 shrink-0 flex-col border-l border-zinc-200 bg-white md:flex">
+        <aside className={`${rightSidebarOpen ? 'md:flex' : ''} hidden w-80 shrink-0 flex-col border-l border-zinc-200 bg-white`}>
           <div className="flex shrink-0 border-b border-zinc-200">
             {(
               [

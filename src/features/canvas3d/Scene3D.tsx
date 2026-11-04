@@ -409,9 +409,9 @@ export default function Scene3D() {
   if (!level) return <div className="flex h-full items-center justify-center text-sm text-zinc-400">文档加载中…</div>;
   const button = 'rounded-md px-2.5 py-1.5 text-xs hover:bg-stone-100';
   return (
-    <div className="relative h-full w-full bg-[#f7f4ee]">
+    <div data-editor-export="scene3d" className="relative h-full w-full bg-[#f7f4ee]">
       <Canvas shadows={{ type: THREE.PCFSoftShadowMap }} dpr={[1, 2]}
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.82 }}
         camera={{ fov: 45, near: 0.05, far: 300, position: [14, 18, 8] }}
         onPointerMissed={() => select(null)} className="touch-none">
         <DetailedScene assets={assets} materials={materials} level={level} cutHeight={cutHeight} labels={labels}

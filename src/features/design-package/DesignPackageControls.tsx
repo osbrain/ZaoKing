@@ -1,14 +1,11 @@
 'use client';
 
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { MAX_DESIGN_PACKAGE_BYTES, parseDesignPackage, serializeDesignPackage, type ParsedDesignPackage } from '@/core/designPackage';
+import { MAX_DESIGN_PACKAGE_BYTES, parseDesignPackage, type ParsedDesignPackage } from '@/core/designPackage';
 import { createProject } from '@/lib/api';
 import type { SceneDocument } from '@/core/types';
-
-function safeFileName(name: string) {
-  return name.trim().replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g, '-').slice(0, 80) || 'zaoking-design';
-}
+import { exportCurrentViewImage, exportPlanSvg, exportProjectFile, type ImageFormat } from '@/features/editor/exportView';
 
 function packageSummary(document: SceneDocument) {
   return {
@@ -19,31 +16,43 @@ function packageSummary(document: SceneDocument) {
   };
 }
 
-export default function DesignPackageControls({ document }: { document: SceneDocument | null }) {
+export default function DesignPackageControls({ document, viewMode }: {
+  document: SceneDocument | null;
+  viewMode: '2d' | '3d';
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [imported, setImported] = useState<ParsedDesignPackage | null>(null);
   const [projectName, setProjectName] = useState('');
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const exportProject = () => {
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setExportMenuOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape, true);
+    return () => window.removeEventListener('keydown', closeOnEscape, true);
+  }, [exportMenuOpen]);
+
+  const runExport = async (action: () => void | Promise<void>) => {
     if (!document) return;
     try {
-      const file = new Blob([serializeDesignPackage(document)], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(file);
-      const link = window.document.createElement('a');
-      link.href = url;
-      link.download = `${safeFileName(document.meta.name)}.zaoking.json`;
-      window.document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setError('');
+      await action();
+      setExportError('');
+      setExportMenuOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '导出失败');
+      setExportError(cause instanceof Error ? cause.message : '导出失败');
     }
   };
+
+  const exportImage = (format: ImageFormat) => runExport(() => exportCurrentViewImage(document!, viewMode, format));
 
   const onFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -86,10 +95,32 @@ export default function DesignPackageControls({ document }: { document: SceneDoc
         <button type="button" onClick={() => inputRef.current?.click()} className="rounded-md border border-zinc-200 px-2 py-1.5 text-xs hover:bg-zinc-50" title="导入项目文件为新项目">
           导入
         </button>
-        <button type="button" onClick={exportProject} disabled={!document} className="rounded-md border border-zinc-200 px-2 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40" title="导出完整户型与组件参数">
+        <button type="button" onClick={() => { setExportMenuOpen(value => !value); setExportError(''); }} disabled={!document}
+          aria-expanded={exportMenuOpen} aria-haspopup="menu"
+          className="rounded-md border border-zinc-200 px-2 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40" title="导出项目、户型图或当前视图">
           导出
         </button>
       </div>
+      {exportMenuOpen && <>
+        <button type="button" aria-label="关闭导出菜单" className="fixed inset-0 z-30 cursor-default" onClick={() => setExportMenuOpen(false)} />
+        <div role="menu" aria-label="导出格式" className="absolute right-14 top-10 z-40 w-56 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-lg">
+          <button role="menuitem" type="button" onClick={() => void runExport(() => exportProjectFile(document!))}
+            className="flex w-full items-start rounded-md px-3 py-2 text-left text-xs hover:bg-zinc-50">
+            <span><span className="block font-medium text-ink">项目参数 JSON</span><span className="mt-0.5 block text-[10px] text-zinc-400">完整户型、组件与材质，可重新导入</span></span>
+          </button>
+          <button role="menuitem" type="button" onClick={() => void runExport(() => exportPlanSvg(document!))}
+            className="flex w-full items-start rounded-md px-3 py-2 text-left text-xs hover:bg-zinc-50">
+            <span><span className="block font-medium text-ink">户型图 SVG</span><span className="mt-0.5 block text-[10px] text-zinc-400">矢量格式，适合打印与继续编辑</span></span>
+          </button>
+          <div className="my-1 border-t border-zinc-100" />
+          <p className="px-3 py-1 text-[10px] font-medium text-zinc-400">当前视图 · {viewMode === '2d' ? '2D 平面' : '3D 场景'}</p>
+          <button role="menuitem" type="button" onClick={() => void exportImage('image/png')}
+            className="w-full rounded-md px-3 py-2 text-left text-xs font-medium text-ink hover:bg-zinc-50">PNG 图片</button>
+          <button role="menuitem" type="button" onClick={() => void exportImage('image/jpeg')}
+            className="w-full rounded-md px-3 py-2 text-left text-xs font-medium text-ink hover:bg-zinc-50">JPEG 图片</button>
+          {exportError && <p role="alert" className="mx-2 mb-1 rounded-md bg-red-50 px-2 py-1.5 text-[10px] leading-4 text-red-700">{exportError}</p>}
+        </div>
+      </>}
       {error && !imported && <span role="alert" className="sr-only">{error}</span>}
       {(imported || (error && !imported)) && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" onClick={() => { if (!busy) { setImported(null); setError(''); } }}>
