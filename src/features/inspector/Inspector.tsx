@@ -8,8 +8,10 @@ import { useEditorStore } from '@/stores/editorStore';
 import { assetById, materialById, materialCatalog } from '@/core/assets';
 import { instanceRef, uid, type Opening, type Wall } from '@/core/types';
 import { analyzeLevelLayout, polyArea } from '@/core/geometry';
+import { estimateFlooring, resolveFlooring } from '@/core/flooring';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from '@/core/pricingLimits';
+import type { FlooringSpec } from '@/core/types';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
 
@@ -205,6 +207,9 @@ export function PropsPanel() {
     if (!room) return <EmptyHint />;
     const mat = materialById(room.floorMaterialId, materials);
     const area = polyArea(room.poly);
+    const flooring = resolveFlooring(room, mat);
+    const floorEstimate = estimateFlooring(room, mat);
+    const updateFlooring = (next: FlooringSpec) => run('调整铺装方案', [{ type: 'setRoomFlooring', roomId: room.id, flooring: next }]);
     return (
       <div className="space-y-4 p-4">
         <h3 className="text-sm font-semibold">{room.name}</h3>
@@ -214,8 +219,8 @@ export function PropsPanel() {
             <p className="text-[11px] text-zinc-400">面积 m²{room.counted === false ? '（不计入）' : ''}</p>
           </div>
           <div>
-            <p className="text-lg font-semibold tabular-nums text-accent">¥{Math.round(area * mat.price * 1.05).toLocaleString()}</p>
-            <p className="text-[11px] text-zinc-400">地面估价（含 5% 损耗）</p>
+            <p className="text-lg font-semibold tabular-nums text-accent">¥{Math.round(floorEstimate.estimatedCost).toLocaleString()}</p>
+            <p className="text-[11px] text-zinc-400">地面估价（按铺法损耗）</p>
           </div>
         </div>
         {!floorEditing && <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
@@ -252,6 +257,41 @@ export function PropsPanel() {
         <MoneyField label="项目单价（元/m²）" value={mat.price} max={MAX_MATERIAL_PRICE_PER_SQM}
           hint="此价格应用到项目中所有使用该材质的房间。"
           onCommit={(price) => { if (price !== undefined) run('调整材质单价', [{ type: 'setMaterialPrice', materialId: mat.id, price }]); }} />
+        <section className="space-y-2 border-t border-zinc-100 pt-3">
+          <h4 className="text-[11px] font-semibold text-zinc-600">铺装参数</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField min={50} max={5000} label="砖长 (mm)" value={flooring.tileMm[0]}
+              onCommit={(tileW) => updateFlooring({ ...flooring, tileMm: [tileW, flooring.tileMm[1]] })} />
+            <NumberField min={50} max={5000} label="砖宽 (mm)" value={flooring.tileMm[1]}
+              onCommit={(tileH) => updateFlooring({ ...flooring, tileMm: [flooring.tileMm[0], tileH] })} />
+            <NumberField min={0} max={20} label="缝宽 (mm)" value={flooring.groutMm}
+              onCommit={(groutMm) => updateFlooring({ ...flooring, groutMm })} />
+            <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
+              铺法
+              <select value={flooring.layout} onChange={(event) => updateFlooring({ ...flooring, layout: event.target.value as FlooringSpec['layout'] })}
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-ink">
+                <option value="straight">直铺</option>
+                <option value="brick">工字铺</option>
+                <option value="diagonal">斜铺</option>
+              </select>
+            </label>
+            <label className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+              填缝颜色
+              <input type="color" value={flooring.groutColor ?? '#c5beb3'}
+                onChange={(event) => updateFlooring({ ...flooring, groutColor: event.target.value })}
+                className="h-7 w-14 cursor-pointer rounded border border-zinc-200" />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField min={-1_000_000} max={1_000_000} label="起铺点 X (mm)" value={flooring.origin[0]}
+              onCommit={(x) => updateFlooring({ ...flooring, origin: [x, flooring.origin[1]] })} />
+            <NumberField min={-1_000_000} max={1_000_000} label="起铺点 Y (mm)" value={flooring.origin[1]}
+              onCommit={(y) => updateFlooring({ ...flooring, origin: [flooring.origin[0], y] })} />
+          </div>
+          <div className="rounded-md bg-zinc-50 px-3 py-2 text-[10px] leading-relaxed text-zinc-500">
+            估算准备 {floorEstimate.requiredAreaM2.toFixed(2)} m² · 约 {floorEstimate.estimatedTileCount} 片 · 损耗参考 {(floorEstimate.wasteRate * 100).toFixed(0)}% · 约 ¥{Math.round(floorEstimate.estimatedCost).toLocaleString()}。实际用量受切割、基层和施工方式影响。
+          </div>
+        </section>
         {!floorEditing && <button
           className="w-full rounded-md border border-red-200 py-1.5 text-xs text-red-600 hover:bg-red-50"
           onClick={() => {
@@ -415,17 +455,21 @@ export function StatsPanel() {
   const counted = level.rooms.filter((r) => r.counted !== false);
   const totalArea = counted.reduce((a, r) => a + polyArea(r.poly), 0);
 
-  const byMat = new Map<string, number>();
+  const byMat = new Map<string, { area: number; requiredArea: number; cost: number }>();
   for (const r of counted) {
-    const a = polyArea(r.poly);
-    byMat.set(r.floorMaterialId, (byMat.get(r.floorMaterialId) ?? 0) + a);
+    const material = materialById(r.floorMaterialId, materials);
+    const estimate = estimateFlooring(r, material);
+    const current = byMat.get(r.floorMaterialId) ?? { area: 0, requiredArea: 0, cost: 0 };
+    current.area += estimate.areaM2;
+    current.requiredArea += estimate.requiredAreaM2;
+    current.cost += estimate.estimatedCost;
+    byMat.set(r.floorMaterialId, current);
   }
   let floorCost = 0;
-  const matRows = [...byMat.entries()].map(([id, area]) => {
+  const matRows = [...byMat.entries()].map(([id, totals]) => {
     const m = materialById(id, materials);
-    const cost = area * m.price * 1.05;
-    floorCost += cost;
-    return { m, area, cost };
+    floorCost += totals.cost;
+    return { m, ...totals };
   });
 
   const pricedItems = new Map<string, { name: string; quantity: number; unitPrice: number; cost: number }>();
@@ -508,13 +552,13 @@ export function StatsPanel() {
       </section>
 
       <section>
-        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-400">地面材料估算（含 5% 损耗）</h3>
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-400">地面材料估算</h3>
         <table className="w-full text-xs">
           <tbody>
-            {matRows.map(({ m, area, cost }) => (
+            {matRows.map(({ m, area, requiredArea, cost }) => (
               <tr key={m.id} className="border-b border-dashed border-zinc-100">
                 <td className="py-1.5">{m.name}</td>
-                <td className="py-1.5 text-right tabular-nums text-zinc-500">{area.toFixed(1)} m²</td>
+                <td className="py-1.5 text-right tabular-nums text-zinc-500">{area.toFixed(1)} → {requiredArea.toFixed(1)} m²</td>
                 <td className="py-1.5 text-right tabular-nums">¥{Math.round(cost).toLocaleString()}</td>
               </tr>
             ))}

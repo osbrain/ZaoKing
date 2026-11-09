@@ -2,6 +2,7 @@
 // Caches belong to a mounted renderer, never to a global WebGL context.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { createFloorTexture } from './floorTexture';
 
 /** @param {THREE.Texture | null} envTex @param {number} anisotropy */
 export function createModelFactory(envTex, anisotropy = 8) {
@@ -54,11 +55,16 @@ function pbrTex(dir, file, coverM, srgb){
   }
   return pbrTexCache[path];
 }
-function floorMat(kind, definition = {}){
-  const key = kind + ':' + JSON.stringify(definition);
+/** @param {string} kind @param {import('../../core/types').Material} definition @param {import('../../core/types').FlooringSpec | null} flooring */
+function floorMat(kind, definition = {}, flooring = null){
+  const key = kind + ':' + JSON.stringify({definition, flooring});
   if (floorMats[key]) return floorMats[key];
   const defaults = TEX[kind] || TEX.tile800;
   const render = definition.render || {};
+  if (flooring) return floorMats[key] = new THREE.MeshStandardMaterial({
+    map: createFloorTexture(definition, flooring, anisotropy),
+    roughness: render.roughness ?? defaults.rough,
+  });
   const [tileW, tileH] = render.tileMm || [defaults.sx * 1000, defaults.sy * 1000];
   const s = {
     ...defaults,

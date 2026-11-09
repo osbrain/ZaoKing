@@ -3,6 +3,7 @@ import { isSimplePolygon } from './geometry';
 import { AssetDefinitionSchema, CustomAssetSchema } from './assetSchema';
 import { assetCatalog, materialCatalog } from './assets';
 import { MaterialSchema } from './materialSchema';
+import { FlooringSchema } from './flooring';
 import { HexColorSchema } from './schemaPrimitives';
 import { MAX_FURNITURE_UNIT_PRICE } from './pricingLimits';
 
@@ -39,6 +40,7 @@ const roomSchema = z.object({
   poly: z.array(vec2Schema).min(3).max(256),
   labelAt: vec2Schema.optional(),
   floorMaterialId: identifier,
+  flooring: FlooringSchema.optional(),
   counted: z.boolean().optional(),
 }).strict().superRefine((room, ctx) => {
   if (!isSimplePolygon(room.poly)) {

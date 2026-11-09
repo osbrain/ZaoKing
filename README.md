@@ -31,7 +31,7 @@ Inspect room structure, furniture placement, materials, and spatial checks in a 
 ## What You Can Do
 
 - **Create and edit floor plans.** Work with rooms, walls, doors, windows, openings, dimensions, a toggleable grid, and orientation indicators.
-- **Switch between layout and floor-finish layers.** Select rooms to edit their floor material and project price; floor mode hides furniture and disables furniture placement and structural drawing tools while keeping the plan context visible.
+- **Switch between layout and floor-finish layers.** Configure room-specific tile size, grout, laying pattern, and start point; compare material quantity and cost estimates. Floor mode hides furniture and disables furniture placement and structural drawing tools while keeping the plan context visible.
 - **Control the canvas display.** Toggle room labels and furniture visibility in both 2D and 3D views.
 - **Move between 2D and 3D.** Edit a plan and inspect the corresponding room layout in a 3D scene backed by the same design data.
 - **Arrange and customize furniture.** Add catalog components, place and rotate them, adjust width, depth, and height, and edit supported component parameters.
@@ -46,7 +46,7 @@ AI recognition and layout checks are design aids. They do not certify measuremen
 
 ## How the Design Data Works
 
-The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. Placed furniture can carry an instance-specific unit price, and material snapshots can retain project-specific prices. The 2D canvas and the Three.js scene render the same geometry while sharing editor display controls.
+The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. A room can store an optional floor-finish override for tile dimensions, grout, laying pattern, and world-space origin; older rooms continue to use their material defaults. Placed furniture can carry an instance-specific unit price, and material snapshots can retain project-specific prices. The 2D canvas and the Three.js scene render the same geometry while sharing editor display controls.
 
 The main interaction flow is:
 
@@ -65,7 +65,7 @@ For AI changes, the server sends the current room and component context to a com
 
 ## Budget Estimate Limits
 
-The estimate combines floor-material area at the project-configured price per square meter (including the current 5% material allowance) with furniture instances that have an entered unit price. Unpriced furniture is listed separately and excluded from the subtotal. Built-in material prices start as editable references, and the component catalog is not connected to live retailer SKUs. Labor, accessories, delivery, installation, discounts, and taxes are outside the estimate.
+The estimate combines each room's floor area with a layout-based material allowance (5% for straight laying, 8% for brick laying, and 12% for diagonal laying) and the project-configured price per square meter. It also estimates tile or plank count from the configured format. These are planning assumptions, not a construction takeoff: cuts, substrate conditions, product packaging, labor, accessories, delivery, installation, discounts, and taxes are not modeled. Unpriced furniture is listed separately and excluded from the subtotal. Built-in material prices are editable references, and the component catalog is not connected to live retailer SKUs.
 
 ## Technology
 

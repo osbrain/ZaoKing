@@ -6,7 +6,7 @@
 
 import { assetById, materialCatalog } from './assets';
 import { docBBox } from './geometry';
-import { furnSVG, materialPatternId, openingsSvg, patternsDefs } from './symbols2d';
+import { furnSVG, materialPatternId, openingsSvg, patternsDefs, roomFlooringDefs, roomFlooringPatternId } from './symbols2d';
 import { instanceGeometry, instanceRef, type SceneDocument } from './types';
 import { documentAssets, documentMaterials } from './sceneResources';
 
@@ -31,7 +31,7 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
   const materials = materialCatalog(documentMaterials(doc));
 
   const rooms = lv.rooms
-    .map((r) => `<polygon points="${r.poly.map((p) => p.join(',')).join(' ')}" fill="url(#${materialPatternId(r.floorMaterialId, prefix)})"/>`)
+    .map((r) => `<polygon points="${r.poly.map((p) => p.join(',')).join(' ')}" fill="url(#${r.flooring ? roomFlooringPatternId(r.id, prefix) : materialPatternId(r.floorMaterialId, prefix)})"/>`)
     .join('');
   const walls = lv.walls
     .map((wl) => `<rect x="${wl.x0}" y="${wl.y0}" width="${wl.x1 - wl.x0}" height="${wl.y1 - wl.y0}" fill="${wl.color ?? WALL_FILL[wl.kind] ?? '#a7a195'}"/>`)
@@ -47,7 +47,7 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="xMidYMid meet">` +
-    `<defs>${patternsDefs(prefix, materials)}</defs>` +
+    `<defs>${patternsDefs(prefix, materials)}${roomFlooringDefs(lv.rooms, materials, prefix)}</defs>` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f7f4ee"/>` +
     rooms +
     openingsSvg(lv) +

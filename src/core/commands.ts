@@ -4,9 +4,10 @@
  * 用户操作、AI 操作、种子初始化共用同一入口（架构关键决策）。
  * ============================================================ */
 
-import type { ComponentInstance, CustomAsset, Opening, Room, SceneDocument, Wall } from './types';
+import type { ComponentInstance, CustomAsset, FlooringSpec, Opening, Room, SceneDocument, Wall } from './types';
 import { CustomAssetSchema } from './assetSchema';
 import { assetById, materialCatalog } from './assets';
+import { FlooringSchema } from './flooring';
 import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from './pricingLimits';
 
 type LevelCmd =
@@ -19,6 +20,7 @@ type LevelCmd =
   | { levelId?: string; type: 'setColor'; id: string; color: string }
   | { levelId?: string; type: 'replaceAsset'; id: string; assetId: string }
   | { levelId?: string; type: 'setRoomMaterial'; roomId: string; materialId: string }
+  | { levelId?: string; type: 'setRoomFlooring'; roomId: string; flooring: FlooringSpec }
   | { levelId?: string; type: 'setRoomName'; roomId: string; name: string }
   /* ---- 户型编辑：墙体 ---- */
   | { levelId?: string; type: 'addWall'; wall: Wall }
@@ -149,6 +151,11 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
         case 'setRoomMaterial': {
           const r = lv.rooms.find((x) => x.id === c.roomId);
           if (r) r.floorMaterialId = c.materialId;
+          break;
+        }
+        case 'setRoomFlooring': {
+          const r = lv.rooms.find((x) => x.id === c.roomId);
+          if (r) r.flooring = FlooringSchema.parse(c.flooring);
           break;
         }
         case 'setRoomName': {

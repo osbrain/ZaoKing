@@ -11,7 +11,12 @@ describe('portable design packages', () => {
     const source = buildSeedDocument('可移植方案');
     source.levels[0].instances[0].unitPrice = 1234.56;
     const withMaterialPrice = applyCmds(source, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 237.5 }]);
-    const exported = createDesignPackage(withMaterialPrice);
+    const room = withMaterialPrice.levels[0].rooms[0];
+    const withFlooring = applyCmds(withMaterialPrice, [{
+      type: 'setRoomFlooring', roomId: room.id,
+      flooring: { tileMm: [600, 300], groutMm: 3, groutColor: '#aaaaaa', layout: 'brick', origin: [120, 240] },
+    }]);
+    const exported = createDesignPackage(withFlooring);
 
     expect(exported.format).toBe(DESIGN_PACKAGE_FORMAT);
     expect(exported.document.assetSnapshots).toBeUndefined();
@@ -19,7 +24,8 @@ describe('portable design packages', () => {
     expect(exported.materialManifest.some(material => material.id === 'tile800')).toBe(true);
 
     const imported = parseDesignPackage(JSON.stringify(exported));
-    expect(imported.document.levels).toEqual(withMaterialPrice.levels);
+    expect(imported.document.levels).toEqual(withFlooring.levels);
+    expect(imported.document.levels[0].rooms[0].flooring).toEqual(withFlooring.levels[0].rooms[0].flooring);
     expect(imported.document.assetSnapshots?.length).toBe(exported.assetManifest.length);
     expect(assetById('a1_5', imported.document.assetSnapshots)).toEqual(assetById('a1_5'));
     expect(materialById('tile800', imported.document.materialSnapshots).render).toEqual(materialById('tile800').render);

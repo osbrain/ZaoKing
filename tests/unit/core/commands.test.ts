@@ -100,6 +100,25 @@ describe('level-scoped commands', () => {
     expect(document.materialSnapshots).toBeUndefined();
   });
 
+  it('stores room-specific flooring parameters through an immutable command', () => {
+    const document = buildBlankDocument();
+    document.levels[0].rooms = [{
+      id: 'living', name: '客厅', poly: [[0, 0], [4000, 0], [4000, 4000], [0, 4000]], floorMaterialId: 'tile800',
+    }];
+    const flooring = {
+      tileMm: [600, 300] as [number, number], groutMm: 3, groutColor: '#aaaaaa',
+      layout: 'brick' as const, origin: [120, 240] as [number, number],
+    };
+
+    const updated = applyCmds(document, [{ type: 'setRoomFlooring', roomId: 'living', flooring }]);
+
+    expect(updated.levels[0].rooms[0].flooring).toEqual(flooring);
+    expect(document.levels[0].rooms[0].flooring).toBeUndefined();
+    expect(() => applyCmds(document, [{
+      type: 'setRoomFlooring', roomId: 'living', flooring: { ...flooring, groutMm: 30 },
+    }])).toThrow();
+  });
+
   it('rejects material prices above the editable limit', () => {
     const document = buildBlankDocument();
     expect(() => applyCmds(document, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 1_000_001 }])).toThrow(/材质单价/);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { assetById, materialById } from '@/core/assets';
 import { polyArea } from '@/core/geometry';
-import { furnSVG, materialPatternId } from '@/core/symbols2d';
+import { furnSVG, materialPatternId, roomFlooringPatternId } from '@/core/symbols2d';
 import { instanceGeometry, instanceRef, type Asset, type ComponentInstance, type Level, type Material, type Vec2, type Wall } from '@/core/types';
 import type { Selection } from '@/stores/editorStore';
 import { centerInRect, type DragState, type WallEdit } from './planGeometry';
@@ -23,7 +23,7 @@ export const RoomsLayer = React.memo(function RoomsLayer({
         <polygon
           key={room.id}
           points={room.poly.map((point) => point.join(',')).join(' ')}
-          fill={`url(#${materialPatternId(room.floorMaterialId)})`}
+          fill={`url(#${room.flooring ? roomFlooringPatternId(room.id) : materialPatternId(room.floorMaterialId)})`}
           className={interactive ? 'cursor-pointer' : ''}
           fillOpacity={selection?.kind === 'room' && selection.id === room.id ? 0.75 : 1}
           onPointerDown={interactive ? (event) => { event.stopPropagation(); onSelect({ kind: 'room', id: room.id }); } : undefined}

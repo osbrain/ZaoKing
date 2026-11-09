@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dimensionLayout, dimsSvg, furnSVG, materialPatternId, openingsSvg } from '@/core/symbols2d';
+import { dimensionLayout, dimsSvg, furnSVG, materialPatternId, openingsSvg, roomFlooringDefs, roomFlooringPatternId } from '@/core/symbols2d';
 import type { Level } from '@/core/types';
 
 const level: Level = {
@@ -53,6 +53,21 @@ describe('sliding door pocket symbols', () => {
 describe('material SVG identifiers', () => {
   it('keeps distinct material IDs distinct after encoding', () => {
     expect(materialPatternId('vendor:oak')).not.toBe(materialPatternId('vendor_oak'));
+  });
+});
+
+describe('room-specific flooring patterns', () => {
+  it('creates a room-scoped brick pattern with its configured grout and world origin', () => {
+    const room = {
+      ...level.rooms[0],
+      flooring: { tileMm: [600, 300] as [number, number], groutMm: 4, groutColor: '#aaaaaa', layout: 'brick' as const, origin: [120, 240] as [number, number] },
+    };
+    const defs = roomFlooringDefs([room]);
+
+    expect(defs).toContain(`id="${roomFlooringPatternId(room.id)}"`);
+    expect(defs).toContain('width="1200" height="600" patternTransform="translate(120 240)"');
+    expect(defs).toContain('stroke="#aaaaaa" stroke-width="4"');
+    expect(defs).toContain('M300 300V600');
   });
 });
 

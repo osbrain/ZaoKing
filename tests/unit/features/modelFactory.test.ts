@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { assetById } from '@/core/assets';
+import { assetById, materialById } from '@/core/assets';
 import { COMPONENT_TEMPLATES } from '@/core/componentTemplates';
 import type { CustomAsset } from '@/core/types';
 import { createModelFactory, disposeModelGeometry } from '@/features/canvas3d/modelFactory';
@@ -224,6 +224,59 @@ describe('3D furniture model factory', () => {
     } finally {
       firstFactory.dispose();
       secondFactory.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('maps room-specific tile size, brick layout, grout, and origin into the 3D floor texture', () => {
+    const context = { fillRect: vi.fn() };
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => ({ getContext: () => context })),
+      createElementNS: vi.fn(() => ({ addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    });
+    const factory = createModelFactory(null);
+
+    try {
+      const finish = {
+        tileMm: [600, 300] as [number, number], groutMm: 3, groutColor: '#aaaaaa',
+        layout: 'brick' as const, origin: [120, 240] as [number, number],
+      };
+      const material = factory.floorMat('tile800', materialById('tile800'), finish);
+
+      expect(material.map?.repeat.x).toBeCloseTo(1 / 1.2);
+      expect(material.map?.repeat.y).toBeCloseTo(1 / 0.6);
+      expect(material.map?.offset.x).toBeCloseTo(-0.12 / 1.2);
+      expect(material.map?.offset.y).toBeCloseTo(-0.24 / 0.6);
+      expect(material.map?.flipY).toBe(false);
+      expect(context.fillRect).toHaveBeenCalled();
+    } finally {
+      factory.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('anchors diagonal rectangular tiles at the world origin and draws wood joints last', () => {
+    const context = { fillRect: vi.fn(), fillStyle: '' };
+    const fills: string[] = [];
+    context.fillRect.mockImplementation(() => fills.push(context.fillStyle));
+    vi.stubGlobal('document', { createElement: vi.fn(() => ({ getContext: () => context })) });
+    const factory = createModelFactory(null);
+    try {
+      const finish = {
+        tileMm: [1200, 200] as [number, number], groutMm: 4, groutColor: '#123456',
+        layout: 'diagonal' as const, origin: [120, 240] as [number, number],
+      };
+      const texture = factory.floorMat('wood', materialById('wood'), finish).map!;
+      texture.updateMatrix();
+      const atOrigin = new THREE.Vector2(0.12, 0.24).applyMatrix3(texture.matrix);
+      const alongTile = new THREE.Vector2(0.12 + 1.2 / Math.sqrt(2), 0.24 + 1.2 / Math.sqrt(2)).applyMatrix3(texture.matrix);
+      expect(atOrigin.x).toBeCloseTo(0);
+      expect(atOrigin.y).toBeCloseTo(0);
+      expect(alongTile.x).toBeCloseTo(1);
+      expect(alongTile.y).toBeCloseTo(0);
+      expect(fills.at(-1)).toBe('#123456');
+    } finally {
+      factory.dispose();
       vi.unstubAllGlobals();
     }
   });

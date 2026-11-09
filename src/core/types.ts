@@ -7,6 +7,17 @@
 
 export type Vec2 = [number, number];
 
+export type FloorLayout = 'straight' | 'brick' | 'diagonal';
+
+export interface FlooringSpec {
+  tileMm: [number, number];
+  groutMm: number;
+  groutColor?: string;
+  layout: FloorLayout;
+  /** World-space tile-grid origin in millimeters. */
+  origin: Vec2;
+}
+
 export type WallKind = 'bearing' | 'exterior' | 'partition' | 'low';
 
 /** 轴对齐墙矩形（与原型数据一致；V1 墙体绘制工具可迁移为中心线模型） */
@@ -30,6 +41,8 @@ export interface Room {
   /** 标签锚点 */
   labelAt?: Vec2;
   floorMaterialId: string;
+  /** Room-specific floor layout. Missing values retain the material's legacy defaults. */
+  flooring?: FlooringSpec;
   /** 飘窗等不计入使用面积 */
   counted?: boolean;
 }

@@ -13,7 +13,7 @@ import type { Cmd } from '@/core/commands';
 import { materialCatalog } from '@/core/assets';
 import { validateComponentPlacement } from '@/core/geometry';
 import { uid, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
-import { dimsSvg, openingsSvg, patternsDefs } from '@/core/symbols2d';
+import { dimsSvg, openingsSvg, patternsDefs, roomFlooringDefs } from '@/core/symbols2d';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import OrientationCompass from '@/features/editor/OrientationCompass';
 import { OpeningOverlay, FurnLayer, LabelsLayer, RoomsLayer, SelLayer, WallsLayer } from './PlanLayers';
@@ -396,7 +396,7 @@ export default function PlanView() {
         onPointerMove={onSvgMove}
         onPointerLeave={onSvgLeave}
       >
-        <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) }} />
+        <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) + roomFlooringDefs(level.rooms, materials) }} />
         {showGrid && <rect x={camera.cx - vw / 2} y={camera.cy - vh / 2} width={vw} height={vh} fill="url(#p-grid)" pointerEvents="none" />}
         <RoomsLayer level={level} selection={selection} onSelect={select} interactive={selecting} />
         <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting && layoutLayer} />

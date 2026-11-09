@@ -8,6 +8,18 @@ describe('SceneDocumentSchema', () => {
     expect(SceneDocumentSchema.safeParse(buildSeedDocument()).success).toBe(true);
   });
 
+  it('validates optional room-specific flooring parameters while accepting legacy rooms', () => {
+    const document = buildBlankDocument();
+    document.levels[0].rooms.push({
+      id: 'living', name: '客厅', poly: [[0, 0], [4000, 0], [4000, 4000], [0, 4000]], floorMaterialId: 'tile800',
+      flooring: { tileMm: [600, 300], groutMm: 3, groutColor: '#aaaaaa', layout: 'brick', origin: [100, 200] },
+    });
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+
+    document.levels[0].rooms[0].flooring!.tileMm = [25, 25];
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+  });
+
   it('accepts legacy sliding openings and explicit pocket-door modes', () => {
     const document = buildBlankDocument();
     document.levels[0].openings = [{ id: 'slider', kind: 'sliding', rect: [100, 100, 1200, 300], height: 2400, sill: 0 }];

@@ -6,9 +6,11 @@
  * ============================================================ */
 
 import type { Asset, Level, Material } from './types';
-import { MATERIALS } from './assets';
+import { MATERIALS, materialById } from './assets';
+import { resolveFlooring } from './flooring';
 import { docBBox } from './geometry';
 import { SLIDING_LEAF_TRAVEL_RATIO } from './clearance';
+import type { Room } from './types';
 
 /* ---------- 基础工具 ---------- */
 
@@ -39,6 +41,26 @@ const pa = (d: string, f = 'none', ex = '') => `<path d="${d}" fill="${f}" ${ST}
 
 export const materialPatternId = (id: string, prefix = '') =>
   `${prefix}m-${Array.from(id, (character) => character.codePointAt(0)!.toString(16)).join('-') || 'empty'}`;
+
+export const roomFlooringPatternId = (roomId: string, prefix = '') =>
+  materialPatternId(`room:${roomId}`, `${prefix}f-`);
+
+export function roomFlooringDefs(rooms: readonly Room[], materials: readonly Material[] = MATERIALS, prefix = ''): string {
+  return rooms.filter((room) => room.flooring).map((room) => {
+    const material = materialById(room.floorMaterialId, materials);
+    const flooring = resolveFlooring(room, material);
+    const [tileW, tileH] = flooring.tileMm;
+    const width = flooring.layout === 'brick' ? tileW * 2 : tileW;
+    const height = flooring.layout === 'brick' ? tileH * 2 : tileH;
+    const grout = flooring.groutColor ?? '#c5beb3';
+    const paths = flooring.layout === 'brick'
+      ? `M0 0H${width}M0 ${tileH}H${width}M0 ${height}H${width}M0 0V${tileH}M${tileW} 0V${tileH}M${width} 0V${tileH}M${tileW / 2} ${tileH}V${height}M${tileW * 1.5} ${tileH}V${height}`
+      : `M0 0H${width}V${height}H0Z`;
+    const transform = ` patternTransform="translate(${flooring.origin.join(' ')})${flooring.layout === 'diagonal' ? ' rotate(45)' : ''}"`;
+    const patternId = roomFlooringPatternId(room.id, prefix);
+    return `<pattern id="${patternId}" patternUnits="userSpaceOnUse" width="${width}" height="${height}"${transform}><rect width="${width}" height="${height}" fill="${material.sw}"/>${flooring.groutMm > 0 ? `<path d="${paths}" stroke="${grout}" stroke-width="${flooring.groutMm}" fill="none"/>` : ''}</pattern>`;
+  }).join('');
+}
 
 export function patternsDefs(prefix = '', materials: readonly Material[] = MATERIALS): string {
   const patterns = materials.map((material) => {

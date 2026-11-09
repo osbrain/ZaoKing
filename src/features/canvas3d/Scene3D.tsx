@@ -125,7 +125,7 @@ function RoomFloor({ room, models, cutHeight, materials }: { room: Room; models:
   }, [room.poly]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   const definition = materialById(room.floorMaterialId, materials);
-  const material = models.floorMat(room.floorMaterialId, definition) as THREE.MeshStandardMaterial;
+  const material = models.floorMat(room.floorMaterialId, definition, room.flooring) as THREE.MeshStandardMaterial;
   const bay = room.counted === false;
   const ceiling = useMemo(() => {
     const shape = new THREE.Shape([...room.poly].reverse().map(([x, y]) => new THREE.Vector2(x / 1000, -y / 1000)));
