@@ -1,4 +1,5 @@
 import type { DesignOp } from './ops';
+import type { CabinetSectionType } from './types';
 
 /** Function names belong to the tool-call envelope, never to its JSON arguments. */
 export function parseAiToolCalls(calls: unknown): DesignOp[] {
@@ -38,6 +39,10 @@ export function parseAiToolCalls(calls: unknown): DesignOp[] {
               .map((key) => [key, number(key)])
               .filter(([, value]) => value !== undefined),
           );
+          if (Array.isArray(args.sections) && args.sections.length <= 8
+            && args.sections.every((value: unknown) => ['door', 'open', 'drawers'].includes(String(value)))) {
+            Object.assign(parameters, { sections: args.sections as CabinetSectionType[] });
+          }
           return Object.keys(parameters).length ? [{ op: fn.name, levelId, room, target, instanceId, ...parameters }] : [];
         }
         case 'set_component_color':

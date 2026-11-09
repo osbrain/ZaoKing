@@ -133,11 +133,19 @@ export type CustomShape =
   | 'bathtub' | 'toilet' | 'shower' | 'planter' | 'floorLamp' | 'pendantLight';
 
 export type CustomFinish = 'wood' | 'paint' | 'fabric' | 'metal' | 'ceramic' | 'glass';
+export type CabinetSectionType = 'door' | 'open' | 'drawers';
 
 export interface CustomGeometry {
   shape: CustomShape;
   finish?: CustomFinish;
-  parameters?: { compartments?: number; openCompartments?: number; shelves?: number; drawers?: number; seats?: number };
+  parameters?: {
+    compartments?: number;
+    openCompartments?: number;
+    shelves?: number;
+    drawers?: number;
+    seats?: number;
+    sections?: CabinetSectionType[];
+  };
 }
 
 export interface CustomAsset extends Asset {

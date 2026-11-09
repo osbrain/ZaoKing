@@ -82,6 +82,18 @@ describe('level-scoped commands', () => {
     expect(updated.levels[0].instances[0].parameters).toEqual({ compartments: 1, openCompartments: 1 });
   });
 
+  it('truncates explicit cabinet sections when the compartment count is reduced', () => {
+    const document = buildBlankDocument();
+    document.levels[0].instances = [{
+      id: 'cabinet-1', assetId: 'cabinet', t: { x: 0, y: 0, rot: 0 },
+      parameters: { compartments: 4, sections: ['door', 'open', 'drawers', 'door'] },
+    }];
+    const updated = applyCmds(document, [{
+      type: 'setParameters', id: 'cabinet-1', parameters: { compartments: 2 },
+    }]);
+    expect(updated.levels[0].instances[0].parameters?.sections).toEqual(['door', 'open']);
+  });
+
   it('sets and clears a placed component price without mutating the source document', () => {
     const document = buildBlankDocument();
     document.levels[0].instances = [{ id: 'sofa-1', assetId: 'sofa', t: { x: 0, y: 0, rot: 0 } }];

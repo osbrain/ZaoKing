@@ -2,6 +2,9 @@ import { z } from 'zod';
 import type { CustomShape } from './types';
 import { HexColorSchema } from './schemaPrimitives';
 
+export const CabinetSectionSchema = z.enum(['door', 'open', 'drawers']);
+const CabinetSectionsSchema = z.array(CabinetSectionSchema).max(8);
+
 export const CustomShapeSchema = z.enum([
   'box', 'cylinder', 'cabinet', 'wallCabinet', 'wardrobe', 'bookcase', 'dresser', 'tvConsole', 'vanity', 'kitchenIsland',
   'sofa', 'cornerSofa', 'armchair', 'bed', 'roundTable', 'diningTable', 'desk', 'chair', 'rug',
@@ -17,15 +20,19 @@ const GeometrySchema = z.object({
     shelves: z.number().int().min(0).max(12).optional(),
     drawers: z.number().int().min(1).max(8).optional(),
     seats: z.number().int().min(1).max(5).optional(),
+    sections: CabinetSectionsSchema.optional(),
   }).strict().optional(),
 }).strict().superRefine((geometry, ctx) => {
-  const { compartments, openCompartments } = geometry.parameters ?? {};
+  const { compartments, openCompartments, sections } = geometry.parameters ?? {};
   if (compartments !== undefined && openCompartments !== undefined && openCompartments > compartments) {
     ctx.addIssue({
       path: ['parameters', 'openCompartments'],
       code: z.ZodIssueCode.custom,
       message: '开放格数量不能超过分区数量',
     });
+  }
+  if (sections && sections.length > (compartments ?? Math.max(2, sections.length))) {
+    ctx.addIssue({ path: ['parameters', 'sections'], code: z.ZodIssueCode.custom, message: '分区类型数量不能超过柜体分区数量' });
   }
 });
 

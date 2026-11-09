@@ -183,6 +183,38 @@ describe('3D furniture model factory', () => {
     environment.dispose();
   });
 
+  it('renders door, open, and drawer sections as distinct cabinet geometry', () => {
+    const factory = createModelFactory(null);
+    const asset: CustomAsset = {
+      id: 'custom:section-cabinet', type: 'custom', name: '分格地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', finish: 'wood', parameters: { compartments: 1, sections: ['door'] } },
+    };
+    const make = (section: 'door' | 'open' | 'drawers') => factory.buildFurniture({
+      ...asset, ...asset.geometry, parameters: { compartments: 1, sections: [section], shelves: 3, drawers: 3 },
+      cx: 0, cy: 0, rot: 0,
+    });
+    const door = make('door');
+    const open = make('open');
+    const drawers = make('drawers');
+    const meshCount = (object: THREE.Object3D) => {
+      let count = 0;
+      object.traverse((child) => { if (child instanceof THREE.Mesh) count++; });
+      return count;
+    };
+
+    expect(meshCount(open)).toBeGreaterThan(meshCount(door));
+    expect(meshCount(drawers)).toBeGreaterThan(meshCount(door));
+    for (const object of [door, open, drawers]) {
+      const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+      expect(size.x).toBeCloseTo(1.8, 3);
+      expect(size.y).toBeCloseTo(0.9, 3);
+      expect(size.z).toBeCloseTo(0.6, 3);
+      disposeModelGeometry(object);
+    }
+    factory.dispose();
+  });
+
   it('keeps cabinet internals inside minimum-size asset dimensions', () => {
     const environment = new THREE.Texture();
     const factory = createModelFactory(environment);

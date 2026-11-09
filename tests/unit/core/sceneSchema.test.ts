@@ -158,4 +158,21 @@ describe('SceneDocumentSchema', () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.issues.some((issue) => issue.path.at(-1) === 'openCompartments')).toBe(true);
   });
+
+  it('validates ordered cabinet section overrides against the effective compartment count', () => {
+    const document = buildBlankDocument();
+    document.assets = [{
+      id: 'custom:cabinet', type: 'custom', name: '定制地柜', category: '餐厨',
+      w: 1800, d: 600, h: 900, color: '#a47a52', tags: [],
+      geometry: { shape: 'cabinet', parameters: { compartments: 3, sections: ['door', 'open', 'drawers'] } },
+    }];
+    document.levels[0].instances = [{
+      id: 'cabinet-1', assetId: 'custom:cabinet', t: { x: 0, y: 0, rot: 0 },
+      parameters: { compartments: 2, sections: ['door', 'open', 'drawers'] },
+    }];
+
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+    document.levels[0].instances[0].parameters = { compartments: 3, sections: ['door', 'open', 'drawers'] };
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+  });
 });

@@ -43,6 +43,20 @@ describe('parseAiToolCalls', () => {
     }]);
   });
 
+  it('parses only supported cabinet section types', () => {
+    expect(parseAiToolCalls([{ function: {
+      name: 'set_component_parameters',
+      arguments: JSON.stringify({ instanceId: 'cabinet-1', sections: ['door', 'open', 'drawers'] }),
+    } }])).toEqual([{
+      op: 'set_component_parameters', levelId: undefined, room: undefined, target: undefined,
+      instanceId: 'cabinet-1', sections: ['door', 'open', 'drawers'],
+    }]);
+    expect(parseAiToolCalls([{ function: {
+      name: 'set_component_parameters',
+      arguments: JSON.stringify({ instanceId: 'cabinet-1', sections: ['door', 'electric'] }),
+    } }])).toEqual([]);
+  });
+
   it('requires an explicit wall ID and supported status for renovation edits', () => {
     expect(parseAiToolCalls([{ function: {
       name: 'set_wall_renovation', arguments: JSON.stringify({ wallId: 'wall-1', status: 'demolished' }),

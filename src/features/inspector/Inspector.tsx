@@ -13,6 +13,7 @@ import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from '@/core/pricingLimits';
 import type { FlooringSpec } from '@/core/types';
 import { wallStatusLabel } from '@/core/renovation';
+import { cabinetSectionTypes, isCabinetShape } from '@/core/cabinet';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
 
@@ -122,7 +123,10 @@ export function PropsPanel() {
     const asset = assetById(inst.assetId, assets);
     const ref = instanceRef(inst, asset);
     const customParameters = asset?.geometry?.parameters;
-    const instanceCompartments = inst.parameters?.compartments ?? customParameters?.compartments ?? 8;
+    const effectiveParameters = { ...customParameters, ...inst.parameters };
+    const cabinetSections = asset?.type === 'custom' && asset.geometry && isCabinetShape(asset.geometry.shape)
+      ? cabinetSectionTypes(effectiveParameters)
+      : [];
     return (
       <div className="space-y-4 p-4">
         <div>
@@ -150,15 +154,31 @@ export function PropsPanel() {
           hint="按实际商品填写；未设置时不计入预算小计。"
           onCommit={(unitPrice) => run('设置家具单价', [{ levelId: level.id, type: 'setInstancePrice', id: inst.id, unitPrice }])} />
         {asset?.type === 'custom' && customParameters && Object.keys(customParameters).length > 0 && (
-          <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 pt-3">
+          <div className="space-y-3 border-t border-zinc-100 pt-3">
+            <div className="grid grid-cols-2 gap-2">
             {([
-              ['compartments', '分区数量', 1, 8], ['openCompartments', '开放格数量', 0, instanceCompartments], ['shelves', '层板数量', 0, 12],
+              ['compartments', '分区数量', 1, 8], ['openCompartments', '开放格数量', 0, 8], ['shelves', '层板数量', 0, 12],
               ['drawers', '抽屉数量', 1, 8], ['seats', '座位数量', 1, 5],
-            ] as const).filter(([key]) => customParameters[key] !== undefined).map(([key, label, min, max]) => (
+            ] as const).filter(([key]) => (customParameters[key] !== undefined || (key === 'drawers' && cabinetSections.length > 0))
+              && !(cabinetSections.length && key === 'openCompartments')).map(([key, label, min, max]) => (
               <NumberField key={key} min={min} max={max} label={label}
-                value={inst.parameters?.[key] ?? customParameters[key]!}
+                value={effectiveParameters[key] ?? (key === 'drawers' ? 3 : 1)}
                 onCommit={(value) => run('调整组件结构参数', [{ type: 'setParameters', id: inst.id, parameters: { [key]: value } }])} />
             ))}
+            </div>
+            {cabinetSections.length > 0 && <div className="grid grid-cols-2 gap-2">
+              {cabinetSections.map((section, index) => <label key={index} className="text-[11px] text-zinc-500">第 {index + 1} 格
+                <select value={section} onChange={(event) => {
+                  const sections = [...cabinetSections];
+                  sections[index] = event.target.value as 'door' | 'open' | 'drawers';
+                  run('调整柜体分区', [{ type: 'setParameters', id: inst.id, parameters: { compartments: sections.length, sections } }]);
+                }} className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-accent">
+                  <option value="door">门板</option>
+                  <option value="open">开放格</option>
+                  <option value="drawers">抽屉</option>
+                </select>
+              </label>)}
+            </div>}
           </div>
         )}
 

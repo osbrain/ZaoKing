@@ -81,6 +81,15 @@ describe('parameterized cabinet symbols', () => {
     expect(svg.match(/<line /g)).toHaveLength(3);
   });
 
+  it('renders ordered door, open, and drawer bays distinctly', () => {
+    const svg = furnSVG('custom', 1800, 600, '#c9b89f', {
+      shape: 'cabinet', parameters: { compartments: 3, sections: ['door', 'open', 'drawers'], shelves: 1, drawers: 3 },
+    });
+    expect(svg).toContain('#f2e7d8');
+    expect(svg.match(/<line /g)).toHaveLength(5);
+    expect(svg.match(/#807261/g)).toHaveLength(2);
+  });
+
   it('keeps cabinet openings positive for minimum-size assets', () => {
     const svg = furnSVG('custom', 10, 10, '#c9b89f', {
       shape: 'cabinet', parameters: { compartments: 8, openCompartments: 8, shelves: 12 },

@@ -11,6 +11,7 @@ import { pointInPoly } from '@/core/geometry';
 import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 import { instanceRef, type SceneDocument } from '@/core/types';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
+import { cabinetSectionTypes, isCabinetShape } from '@/core/cabinet';
 import { wallStatusLabel } from '@/core/renovation';
 import { getChatProviderConfig, type AiProviderConfig } from '@/lib/aiProvider';
 import { z } from 'zod';
@@ -39,7 +40,14 @@ function packContext(doc: SceneDocument): string {
           const parameters = Object.entries(asset?.geometry?.parameters ?? {})
             .map(([key, value]) => `${key}=${i.parameters?.[key as keyof NonNullable<typeof i.parameters>] ?? value}`)
             .join(',');
-          return `${ref.name}（instanceId=${i.id}，${ref.w}×${ref.d}×${ref.h}mm，${Math.round(i.t.rot)}°${parameters ? `，支持参数 ${parameters}` : ''}）`;
+          const cabinetSections = asset?.geometry?.shape && isCabinetShape(asset.geometry.shape)
+            ? cabinetSectionTypes({ ...asset.geometry.parameters, ...i.parameters })
+            : null;
+          const editableParameters = [
+            parameters,
+            cabinetSections ? `sections=${cabinetSections.join('/')}（逐格可设 door/open/drawers，从左到右）` : '',
+          ].filter(Boolean).join(';');
+          return `${ref.name}（instanceId=${i.id}，${ref.w}×${ref.d}×${ref.h}mm，${Math.round(i.t.rot)}°${editableParameters ? `，支持参数 ${editableParameters}` : ''}）`;
         });
       lines.push(`- ${r.name}${r.counted === false ? '（飘窗，不计面积）' : ''}：${instances.length ? instances.join('、') : '空'}`);
     }
@@ -58,7 +66,7 @@ const SYSTEM_PROMPT = `你是 ZaoKing 室内设计助手，通过调用工具函
 1. 组件目标优先使用上下文中的 instanceId；同名组件有多个时调用 ask_user，不要猜。
 2. 多层方案必须传 levelId，room 必须使用该楼层中出现过的房间名。
 3. 不要推断精确尺寸或移动距离；只有用户明确给出毫米数或角度时才调用相应参数工具。
-4. 结构参数只可修改上下文明确列出的资产参数；不支持的参数不要猜。
+4. 结构参数只可修改上下文明确列出的资产参数；柜体 sections 可逐格设为 door、open 或 drawers，顺序从左到右；不支持的参数不要猜。
 5. 添加组件的位置由系统求解。用户一句话包含多个意图时可调用多个工具。
 6. 墙面换色使用 set_wall_color，地面材料使用 set_floor_material；不要把墙面指令误作地面指令。
 7. 拆改只使用 set_wall_renovation，并且必须使用上下文给出的 wallId；承重墙或外墙拆除必须提醒现场专业核验与审批，不能将模型标记描述为施工许可。
@@ -159,7 +167,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'set_component_parameters',
-      description: '修改定制家具实例支持的结构参数，如柜体分区、开放格、开放格层板、抽屉或沙发座位数量',
+      description: '修改定制家具实例支持的结构参数；定制柜可按从左到右逐格设置门板、开放格或抽屉',
       parameters: {
         type: 'object',
         properties: {
@@ -169,6 +177,7 @@ const TOOLS = [
           shelves: { type: 'integer', minimum: 0, maximum: 12 },
           drawers: { type: 'integer', minimum: 1, maximum: 8 },
           seats: { type: 'integer', minimum: 1, maximum: 5 },
+          sections: { type: 'array', items: { type: 'string', enum: ['door', 'open', 'drawers'] }, minItems: 1, maxItems: 8, description: '柜体每格的类型，按从左到右排列，长度必须等于分区数量' },
         },
         required: [],
       },

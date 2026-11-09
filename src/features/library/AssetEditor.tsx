@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { COMPONENT_TEMPLATES, componentTemplateByShape } from '@/core/componentTemplates';
 import { CustomAssetSchema } from '@/core/assetSchema';
+import { cabinetSectionTypes, isCabinetShape } from '@/core/cabinet';
 import { furnSVG } from '@/core/symbols2d';
 import { uid, type CustomAsset, type CustomFinish, type CustomShape } from '@/core/types';
 
@@ -53,12 +54,16 @@ export default function AssetEditor({ asset, onSave, onCancel }: {
           if (key === 'compartments' && value !== undefined && next.openCompartments !== undefined) {
             next.openCompartments = Math.min(next.openCompartments, value);
           }
+          if (key === 'compartments' && value !== undefined && isCabinetShape(shape) && current.sections) {
+            next.sections = cabinetSectionTypes({ ...current, compartments: value });
+          }
           return next;
         })}
         className={fieldClass} />
     </label>
   );
-  const cabinetShapes = ['cabinet', 'wallCabinet', 'wardrobe', 'tvConsole', 'kitchenIsland'].includes(shape);
+  const cabinetShapes = isCabinetShape(shape);
+  const sections = cabinetSectionTypes(parameters);
   return (
     <form onSubmit={submit} className="space-y-3 p-3" aria-label={asset ? '编辑自定义组件' : '新建自定义组件'}>
       <div className="flex items-center justify-between">
@@ -93,11 +98,24 @@ export default function AssetEditor({ asset, onSave, onCancel }: {
         <legend className="px-1 text-[11px] text-zinc-500">结构参数</legend>
         <div className="grid grid-cols-2 gap-2">
           {['cabinet', 'wallCabinet', 'wardrobe', 'bookcase', 'tvConsole', 'kitchenIsland'].includes(shape) && numericParameter('compartments', '分区数量', 1, 8)}
-          {cabinetShapes && numericParameter('openCompartments', '开放格数量（从左起）', 0, parameters.compartments ?? 8)}
           {(cabinetShapes || shape === 'bookcase') && numericParameter('shelves', cabinetShapes ? '每个开放格层板数' : '层板数量', 0, 12)}
+          {cabinetShapes && numericParameter('drawers', '抽屉格抽屉数量', 1, 8)}
           {['dresser', 'vanity'].includes(shape) && numericParameter('drawers', '抽屉数量', 1, 8)}
           {shape === 'sofa' && numericParameter('seats', '座位数量', 1, 5)}
         </div>
+        {cabinetShapes && <div className="mt-2 grid grid-cols-2 gap-2">
+          {sections.map((section, index) => <label key={index} className="text-[11px] text-zinc-500">第 {index + 1} 格
+            <select value={section} onChange={event => setParameters(current => {
+              const nextSections = cabinetSectionTypes(current);
+              nextSections[index] = event.target.value as 'door' | 'open' | 'drawers';
+              return { ...current, compartments: nextSections.length, sections: nextSections };
+            })} className={fieldClass}>
+              <option value="door">门板</option>
+              <option value="open">开放格</option>
+              <option value="drawers">抽屉</option>
+            </select>
+          </label>)}
+        </div>}
       </fieldset>}
       <label className="block text-xs text-zinc-500">饰面类型
         <select value={finish} onChange={event => setFinish(event.target.value as CustomFinish)} className={fieldClass}>

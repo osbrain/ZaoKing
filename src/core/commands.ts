@@ -130,6 +130,9 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
               && effectiveParameters.openCompartments > effectiveParameters.compartments) {
               parameters.openCompartments = effectiveParameters.compartments;
             }
+            if (parameters.sections && effectiveParameters.compartments !== undefined) {
+              parameters.sections = parameters.sections.slice(0, effectiveParameters.compartments);
+            }
             i.parameters = parameters;
           }
           break;

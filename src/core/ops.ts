@@ -6,7 +6,7 @@
  * ============================================================ */
 
 import type { Cmd } from './commands';
-import type { Asset, ComponentInstance, Level, Room, SceneDocument, WallRenovationStatus } from './types';
+import type { Asset, CabinetSectionType, ComponentInstance, Level, Room, SceneDocument, WallRenovationStatus } from './types';
 import { uid } from './types';
 import {
   assetCatalog,
@@ -17,6 +17,7 @@ import {
 } from './assets';
 import { pointInPoly, polyArea, solvePlacement, validateComponentPlacement } from './geometry';
 import { documentAssets, documentMaterials } from './sceneResources';
+import { isCabinetShape } from './cabinet';
 
 export type DesignOp =
   | { op: 'add_component'; levelId?: string; room?: string; query: string }
@@ -24,7 +25,7 @@ export type DesignOp =
   | { op: 'delete_component'; levelId?: string; room?: string; target?: string; instanceId?: string }
   | { op: 'move_component'; levelId?: string; room?: string; target?: string; instanceId?: string; dxMm?: number; dyMm?: number; rotationDeltaDeg?: number }
   | { op: 'resize_component'; levelId?: string; room?: string; target?: string; instanceId?: string; widthMm?: number; depthMm?: number; heightMm?: number }
-  | { op: 'set_component_parameters'; levelId?: string; room?: string; target?: string; instanceId?: string; compartments?: number; openCompartments?: number; shelves?: number; drawers?: number; seats?: number }
+  | { op: 'set_component_parameters'; levelId?: string; room?: string; target?: string; instanceId?: string; compartments?: number; openCompartments?: number; shelves?: number; drawers?: number; seats?: number; sections?: CabinetSectionType[] }
   | { op: 'set_component_color'; levelId?: string; room?: string; target?: string; instanceId?: string; query: string }
   | { op: 'set_wall_color'; levelId?: string; room?: string; wallId?: string; query: string }
   | { op: 'set_wall_renovation'; levelId?: string; wallId: string; status: 'retained' | WallRenovationStatus }
@@ -239,7 +240,7 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         for (const key of ['compartments', 'openCompartments', 'shelves', 'drawers', 'seats'] as const) {
           const value = op[key];
           if (value === undefined) continue;
-          const allowed = supported[key];
+          const allowed = supported[key] ?? (key === 'drawers' && asset?.geometry && isCabinetShape(asset.geometry.shape) ? 3 : undefined);
           if (allowed === undefined) { log.push(`⚠「${asset?.name ?? '该组件'}」不支持修改${key}`); continue; }
           const min = key === 'shelves' || key === 'openCompartments' ? 0 : 1;
           const max = key === 'seats' ? 5 : key === 'shelves' ? 12 : 8;
@@ -249,6 +250,17 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
             log.push(`⚠ 开放格数量不能超过分区数量（${totalCompartments}）`); continue;
           }
           parameters[key] = value;
+        }
+        if (op.sections !== undefined) {
+          const sectionCount = op.compartments ?? inst.parameters?.compartments ?? supported.compartments ?? 2;
+          if (!supported.compartments || !asset?.geometry || !isCabinetShape(asset.geometry.shape)) {
+            log.push(`⚠「${asset?.name ?? '该组件'}」不支持逐格柜体配置`);
+          } else if (!Array.isArray(op.sections) || op.sections.length !== sectionCount
+            || op.sections.some((section) => !['door', 'open', 'drawers'].includes(section))) {
+            log.push(`⚠ 柜体分区配置必须为 ${sectionCount} 格，每格选择门板、开放格或抽屉`);
+          } else {
+            parameters.sections = [...op.sections];
+          }
         }
         if (!Object.keys(parameters).length) break;
         cmds.push({ levelId: level.id, type: 'setParameters', id: inst.id, parameters });

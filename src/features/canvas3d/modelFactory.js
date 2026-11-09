@@ -279,7 +279,8 @@ function buildCustomFurniture(g, f, w, d, c){
       const frontZ = d/2 - doorDepth/2;
       const interiorDepth = d - back - Math.min(.008, d*.04);
       const interiorZ = -d/2 + back + interiorDepth/2;
-      const openCount = Math.min(bayCount, Math.max(0, Math.floor(params.openCompartments ?? 0)));
+      const sectionTypes = Array.from({ length: bayCount }, (_, index) =>
+        params.sections?.[index] ?? (index < Math.max(0, Math.floor(params.openCompartments ?? 0)) ? 'open' : 'door'));
 
       // Build a hollow carcass so open bays reveal their back, sides and adjustable shelves.
       g.add(
@@ -294,22 +295,37 @@ function buildCustomFurniture(g, f, w, d, c){
         g.add(box(divider, innerHeight, interiorDepth, finish, x, plinth + panel, interiorZ));
       }
       const shelves = Math.min(12, Math.max(0, Math.floor(params.shelves ?? 0)));
-      for (let bay = 0; bay < openCount; bay++) {
+      for (let bay = 0; bay < bayCount; bay++) {
+        if (sectionTypes[bay] !== 'open') continue;
         const x = -innerWidth/2 + bayWidth*(bay + .5) + divider*bay;
         for (let shelf = 1; shelf <= shelves; shelf++) {
           const y = plinth + panel + innerHeight*shelf/(shelves + 1) - panel/2;
           g.add(box(bayWidth*.96, panel, interiorDepth, finish, x, y, interiorZ));
         }
       }
-      for (let bay = openCount; bay < bayCount; bay++) {
+      for (let bay = 0; bay < bayCount; bay++) {
+        if (sectionTypes[bay] === 'open') continue;
         const x = -innerWidth/2 + bayWidth*(bay + .5) + divider*bay;
         const doorHeight = Math.max(.02, bodyTop - plinth - panel*.45);
         const doorWidth = bayWidth*.96;
-        g.add(box(doorWidth, doorHeight, doorDepth, finish, x, plinth + panel*.2, frontZ));
-        const handleHeight = Math.min(.14, doorHeight*.18);
-        const handleX = x + (bay % 2 ? -1 : 1)*doorWidth*.34;
-        const handleRadius = Math.min(.006, doorWidth*.04, d*.05);
-        g.add(cyl(handleRadius, handleRadius, handleHeight, trim, handleX, plinth + (doorHeight - handleHeight)*.52, d/2 - handleRadius, 10));
+        if (sectionTypes[bay] === 'drawers') {
+          const drawerCount = Math.max(1, Math.min(8, Math.floor(params.drawers ?? 3)));
+          const gap = Math.min(.012, doorHeight/(drawerCount*12));
+          const drawerHeight = (doorHeight - gap*(drawerCount-1))/drawerCount;
+          for (let drawer = 0; drawer < drawerCount; drawer++) {
+            const drawerY = plinth + panel*.2 + drawer*(drawerHeight + gap);
+            g.add(box(doorWidth, drawerHeight, doorDepth, finish, x, drawerY, frontZ));
+            const handleRadius = Math.min(.006, doorWidth*.04, d*.05);
+            g.add(cyl(handleRadius, handleRadius, Math.min(.08, drawerHeight*.18), trim,
+              x, drawerY + drawerHeight*.55, d/2 - handleRadius, 10));
+          }
+        } else {
+          g.add(box(doorWidth, doorHeight, doorDepth, finish, x, plinth + panel*.2, frontZ));
+          const handleHeight = Math.min(.14, doorHeight*.18);
+          const handleX = x + (bay % 2 ? -1 : 1)*doorWidth*.34;
+          const handleRadius = Math.min(.006, doorWidth*.04, d*.05);
+          g.add(cyl(handleRadius, handleRadius, handleHeight, trim, handleX, plinth + (doorHeight - handleHeight)*.52, d/2 - handleRadius, 10));
+        }
       }
       if (f.shape === 'wardrobe') {
         const cap = Math.min(.012, h);

@@ -36,6 +36,7 @@ Inspect room structure, furniture placement, materials, and spatial checks in a 
 - **Control the canvas display.** Toggle room labels and furniture visibility in both 2D and 3D views.
 - **Move between 2D and 3D.** Edit a plan and inspect the corresponding room layout in a 3D scene backed by the same design data.
 - **Arrange and customize furniture.** Add catalog components, place and rotate them, adjust width, depth, and height, and edit supported component parameters.
+- **Configure made-to-measure cabinet bays.** Choose door fronts, open shelves, or drawer stacks for each bay and keep the same section layout in the 2D plan, 3D model, instance properties, saved design, and AI parameter tools.
 - **Estimate a project budget.** Set project-specific floor-material prices and actual unit prices for placed furniture; the estimate marks unpriced furniture instead of silently counting it as free.
 - **Ask the AI assistant to make changes.** Describe additions, deletions, replacements, moves, size changes, colors, or floor materials in natural language.
 - **Import a floor-plan image.** Use a configured vision model to create a draft from an uploaded screenshot, then review and edit the recognized geometry.

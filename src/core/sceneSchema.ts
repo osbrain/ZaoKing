@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { isSimplePolygon } from './geometry';
-import { AssetDefinitionSchema, CustomAssetSchema } from './assetSchema';
+import { AssetDefinitionSchema, CabinetSectionSchema, CustomAssetSchema } from './assetSchema';
 import { assetCatalog, materialCatalog } from './assets';
 import { MaterialSchema } from './materialSchema';
 import { FlooringSchema } from './flooring';
@@ -86,6 +86,7 @@ const componentInstanceSchema = z.object({
     shelves: z.number().int().min(0).max(12).optional(),
     drawers: z.number().int().min(1).max(8).optional(),
     seats: z.number().int().min(1).max(5).optional(),
+    sections: z.array(CabinetSectionSchema).max(8).optional(),
   }).strict().refine((parameters) => Object.keys(parameters).length > 0, 'At least one parameter override is required').optional(),
   unitPrice: z.number().finite().min(0).max(MAX_FURNITURE_UNIT_PRICE).optional(),
   color: HexColorSchema.optional(),
@@ -163,6 +164,13 @@ export const SceneDocumentSchema = z.object({
             path: ['levels', index, 'instances', instanceIndex, 'parameters', 'openCompartments'],
             code: z.ZodIssueCode.custom,
             message: 'Open compartments cannot exceed total compartments',
+          });
+        }
+        if (effectiveParameters.sections && effectiveParameters.sections.length > (effectiveParameters.compartments ?? Math.max(2, effectiveParameters.sections.length))) {
+          ctx.addIssue({
+            path: ['levels', index, 'instances', instanceIndex, 'parameters', 'sections'],
+            code: z.ZodIssueCode.custom,
+            message: 'Cabinet section types cannot exceed the number of compartments',
           });
         }
       }
