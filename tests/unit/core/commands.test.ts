@@ -125,6 +125,23 @@ describe('level-scoped commands', () => {
     expect(document.materialSnapshots).toBeUndefined();
   });
 
+  it('sets and clears project-level cabinet estimate rates immutably', () => {
+    const document = buildBlankDocument();
+    const withRate = applyCmds(document, [{
+      type: 'setCabinetPriceRule', cabinetClass: 'base', ratePerLinearMeter: 12500.55,
+    }]);
+    const withoutRate = applyCmds(withRate, [{
+      type: 'setCabinetPriceRule', cabinetClass: 'base', ratePerLinearMeter: undefined,
+    }]);
+
+    expect(withRate.cabinetPricing).toEqual({ basePerLinearMeter: 12500.55 });
+    expect(document.cabinetPricing).toBeUndefined();
+    expect(withoutRate.cabinetPricing).toBeUndefined();
+    expect(() => applyCmds(document, [{
+      type: 'setCabinetPriceRule', cabinetClass: 'wall', ratePerLinearMeter: 1_000_001,
+    }])).toThrow(/柜体延米单价/);
+  });
+
   it('stores room-specific flooring parameters through an immutable command', () => {
     const document = buildBlankDocument();
     document.levels[0].rooms = [{

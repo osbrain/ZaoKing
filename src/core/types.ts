@@ -8,6 +8,13 @@
 export type Vec2 = [number, number];
 
 export type FloorLayout = 'straight' | 'brick' | 'diagonal';
+export type CabinetPricingClass = 'base' | 'wall' | 'tall';
+
+export interface CabinetPricing {
+  basePerLinearMeter?: number;
+  wallPerLinearMeter?: number;
+  tallPerLinearMeter?: number;
+}
 
 export interface FlooringSpec {
   tileMm: [number, number];
@@ -107,6 +114,8 @@ export interface SceneDocument {
   assetSnapshots?: Asset[];
   /** 地面材质快照，用于跨目录版本保留外观和铺装参数。 */
   materialSnapshots?: Material[];
+  /** Optional project-level linear-meter estimates for made-to-measure cabinets. */
+  cabinetPricing?: CabinetPricing;
 }
 
 /* ---------- 资产目录（Asset）与材质（Material） ---------- */

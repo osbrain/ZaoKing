@@ -102,6 +102,17 @@ describe('SceneDocumentSchema', () => {
     expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
   });
 
+  it('accepts project-level cabinet rates and rejects empty or out-of-range rules', () => {
+    const document = buildBlankDocument();
+    document.cabinetPricing = { basePerLinearMeter: 12800, wallPerLinearMeter: 8600 };
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+
+    document.cabinetPricing = {};
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+    document.cabinetPricing = { tallPerLinearMeter: 1_000_001 };
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+  });
+
   it('rejects material snapshot prices above the editable limit', () => {
     const document = buildBlankDocument();
     document.materialSnapshots = [{

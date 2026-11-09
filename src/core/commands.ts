@@ -4,11 +4,11 @@
  * 用户操作、AI 操作、种子初始化共用同一入口（架构关键决策）。
  * ============================================================ */
 
-import type { ComponentInstance, CustomAsset, FlooringSpec, Opening, Room, SceneDocument, Wall, WallRenovationStatus } from './types';
+import type { CabinetPricingClass, ComponentInstance, CustomAsset, FlooringSpec, Opening, Room, SceneDocument, Wall, WallRenovationStatus } from './types';
 import { CustomAssetSchema } from './assetSchema';
 import { assetById, materialCatalog } from './assets';
 import { FlooringSchema } from './flooring';
-import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from './pricingLimits';
+import { MAX_CABINET_PRICE_PER_LINEAR_METER, MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from './pricingLimits';
 
 type LevelCmd =
   | { levelId?: string; type: 'place'; inst: ComponentInstance }
@@ -40,7 +40,9 @@ type AssetCmd = (
   | { type: 'deleteAsset'; id: string }
 ) & { levelId?: never };
 
-type DocumentCmd = { type: 'setMaterialPrice'; materialId: string; price: number } & { levelId?: never };
+type DocumentCmd =
+  | ({ type: 'setMaterialPrice'; materialId: string; price: number } & { levelId?: never })
+  | ({ type: 'setCabinetPriceRule'; cabinetClass: CabinetPricingClass; ratePerLinearMeter: number | undefined } & { levelId?: never });
 
 export type Cmd = LevelCmd | AssetCmd | DocumentCmd;
 
@@ -49,7 +51,7 @@ function isAssetCommand(command: Cmd): command is AssetCmd {
 }
 
 function isDocumentCommand(command: Cmd): command is DocumentCmd {
-  return command.type === 'setMaterialPrice';
+  return command.type === 'setMaterialPrice' || command.type === 'setCabinetPriceRule';
 }
 
 export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
@@ -82,15 +84,27 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
       continue;
     }
     if (isDocumentCommand(c)) {
-      if (!Number.isFinite(c.price) || c.price < 0 || c.price > MAX_MATERIAL_PRICE_PER_SQM) {
-        throw new Error(`材质单价必须在 0 至 ${MAX_MATERIAL_PRICE_PER_SQM.toLocaleString('en-US')} 元之间`);
+      if (c.type === 'setMaterialPrice') {
+        if (!Number.isFinite(c.price) || c.price < 0 || c.price > MAX_MATERIAL_PRICE_PER_SQM) {
+          throw new Error(`材质单价必须在 0 至 ${MAX_MATERIAL_PRICE_PER_SQM.toLocaleString('en-US')} 元之间`);
+        }
+        const material = materialCatalog(d.materialSnapshots).find((item) => item.id === c.materialId);
+        if (!material) throw new Error('材质不存在');
+        d.materialSnapshots = [
+          ...(d.materialSnapshots ?? []).filter((item) => item.id !== c.materialId),
+          { ...material, price: Math.round(c.price * 100) / 100 },
+        ];
+      } else {
+        if (c.ratePerLinearMeter !== undefined && (!Number.isFinite(c.ratePerLinearMeter) || c.ratePerLinearMeter < 0 || c.ratePerLinearMeter > MAX_CABINET_PRICE_PER_LINEAR_METER)) {
+          throw new Error(`柜体延米单价必须在 0 至 ${MAX_CABINET_PRICE_PER_LINEAR_METER.toLocaleString('en-US')} 元之间`);
+        }
+        const key = c.cabinetClass === 'base' ? 'basePerLinearMeter'
+          : c.cabinetClass === 'wall' ? 'wallPerLinearMeter' : 'tallPerLinearMeter';
+        const pricing = { ...d.cabinetPricing };
+        if (c.ratePerLinearMeter === undefined) delete pricing[key];
+        else pricing[key] = Math.round(c.ratePerLinearMeter * 100) / 100;
+        d.cabinetPricing = Object.values(pricing).some((value) => value !== undefined) ? pricing : undefined;
       }
-      const material = materialCatalog(d.materialSnapshots).find((item) => item.id === c.materialId);
-      if (!material) throw new Error('材质不存在');
-      d.materialSnapshots = [
-        ...(d.materialSnapshots ?? []).filter((item) => item.id !== c.materialId),
-        { ...material, price: Math.round(c.price * 100) / 100 },
-      ];
       continue;
     }
     for (const lv of d.levels) {

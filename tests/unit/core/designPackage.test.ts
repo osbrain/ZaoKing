@@ -10,6 +10,7 @@ describe('portable design packages', () => {
   it('round-trips room layout, used asset definitions, and material render parameters', () => {
     const source = buildSeedDocument('可移植方案');
     source.levels[0].instances[0].unitPrice = 1234.56;
+    source.cabinetPricing = { basePerLinearMeter: 12800, wallPerLinearMeter: 8600 };
     const withMaterialPrice = applyCmds(source, [{ type: 'setMaterialPrice', materialId: 'tile800', price: 237.5 }]);
     const room = withMaterialPrice.levels[0].rooms[0];
     const withFlooring = applyCmds(withMaterialPrice, [{
@@ -30,6 +31,7 @@ describe('portable design packages', () => {
     expect(assetById('a1_5', imported.document.assetSnapshots)).toEqual(assetById('a1_5'));
     expect(materialById('tile800', imported.document.materialSnapshots).render).toEqual(materialById('tile800').render);
     expect(imported.document.levels[0].instances[0].unitPrice).toBe(1234.56);
+    expect(imported.document.cabinetPricing).toEqual(withFlooring.cabinetPricing);
     expect(materialById('tile800', imported.document.materialSnapshots).price).toBe(237.5);
     expect(SceneDocumentSchema.safeParse(imported.document).success).toBe(true);
   });

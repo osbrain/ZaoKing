@@ -14,6 +14,8 @@ import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from '@/core/pri
 import type { FlooringSpec } from '@/core/types';
 import { wallStatusLabel } from '@/core/renovation';
 import { cabinetSectionTypes, isCabinetShape } from '@/core/cabinet';
+import { CABINET_PRICING_RULES, cabinetPricingClass, estimateCabinetCost } from '@/core/cabinetPricing';
+import { MAX_CABINET_PRICE_PER_LINEAR_METER } from '@/core/pricingLimits';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
 
@@ -480,6 +482,7 @@ function EmptyHint() {
 
 export function StatsPanel() {
   const doc = useSceneStore((s) => s.doc);
+  const run = useSceneStore((s) => s.run);
   if (!doc) return null;
   const materials = materialCatalog(documentMaterials(doc));
   const assets = documentAssets(doc);
@@ -509,9 +512,24 @@ export function StatsPanel() {
 
   const pricedItems = new Map<string, { name: string; quantity: number; unitPrice: number; cost: number }>();
   const unpricedItems = new Map<string, { name: string; quantity: number }>();
+  const estimatedCabinets = new Map<string, { name: string; quantity: number; lengthM: number; rate: number; cost: number }>();
   for (const instance of level.instances) {
-    const name = assetById(instance.assetId, assets)?.name ?? '未知组件';
+    const asset = assetById(instance.assetId, assets);
+    const name = asset?.name ?? '未知组件';
     if (instance.unitPrice === undefined) {
+      const cabinetClass = cabinetPricingClass(asset);
+      const pricingRule = CABINET_PRICING_RULES.find((rule) => rule.cabinetClass === cabinetClass);
+      const rate = pricingRule ? doc.cabinetPricing?.[pricingRule.key] : undefined;
+      if (pricingRule && rate !== undefined && asset) {
+        const widthMm = instance.size?.w ?? asset.w;
+        const key = `${instance.assetId}:${rate}`;
+        const item = estimatedCabinets.get(key) ?? { name, quantity: 0, lengthM: 0, rate, cost: 0 };
+        item.quantity += 1;
+        item.lengthM += widthMm / 1000;
+        item.cost += estimateCabinetCost(widthMm, rate);
+        estimatedCabinets.set(key, item);
+        continue;
+      }
       const item = unpricedItems.get(instance.assetId) ?? { name, quantity: 0 };
       item.quantity += 1;
       unpricedItems.set(instance.assetId, item);
@@ -524,8 +542,10 @@ export function StatsPanel() {
     pricedItems.set(key, item);
   }
   const furnitureRows = [...pricedItems.values()];
+  const cabinetRows = [...estimatedCabinets.values()];
   const furnitureCost = furnitureRows.reduce((total, item) => total + item.cost, 0);
-  const totalCost = floorCost + furnitureCost;
+  const cabinetCost = cabinetRows.reduce((total, item) => total + item.cost, 0);
+  const totalCost = floorCost + furnitureCost + cabinetCost;
   const unpricedFurnitureCount = [...unpricedItems.values()].reduce((total, item) => total + item.quantity, 0);
 
   return (
@@ -607,6 +627,30 @@ export function StatsPanel() {
       </section>
 
       <section>
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-400">定制柜体估算</h3>
+        <p className="mb-3 text-[10px] leading-relaxed text-zinc-500">按组件正面宽度折算延米；逐件填写的实际单价优先，不重复估算。未关联供应商报价，且不含台面、五金、测量、运输和安装。</p>
+        <div className="grid grid-cols-1 gap-2">
+          {CABINET_PRICING_RULES.map((rule) => <MoneyField key={rule.cabinetClass}
+            label={`${rule.label}（元/延米）`} value={doc.cabinetPricing?.[rule.key]} allowUnset
+            hint="按本项目供应商报价填写；清空可取消该类估算。"
+            max={MAX_CABINET_PRICE_PER_LINEAR_METER}
+            onCommit={(ratePerLinearMeter) => run('设置柜体估算费率', [{
+              type: 'setCabinetPriceRule', cabinetClass: rule.cabinetClass, ratePerLinearMeter,
+            }])} />)}
+        </div>
+        {cabinetRows.length > 0 ? <table className="mt-3 w-full text-xs">
+          <tbody>
+            {cabinetRows.map((item, index) => <tr key={`${item.name}-${item.rate}-${index}`} className="border-b border-dashed border-zinc-100">
+              <td className="py-1.5">{item.name} × {item.quantity}
+                <span className="ml-1 block text-[10px] text-zinc-400">{item.lengthM.toFixed(2)} 延米 × ¥{item.rate.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/m</span>
+              </td>
+              <td className="py-1.5 text-right tabular-nums">¥{item.cost.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>)}
+          </tbody>
+        </table> : <p className="mt-2 text-[11px] text-zinc-400">配置费率后，未手动填写实价的定制柜体会计入估算。</p>}
+      </section>
+
+      <section>
         <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-400">家具商品估算</h3>
         {furnitureRows.length > 0 ? <table className="w-full text-xs">
           <tbody>
@@ -622,7 +666,7 @@ export function StatsPanel() {
           {unpricedFurnitureCount} 件家具未设置单价，未计入小计：{[...unpricedItems.values()].map((item) => `${item.name} × ${item.quantity}`).join('、')}
         </div>}
         <div className="mt-3 flex justify-between border-t border-zinc-100 pt-3 text-sm font-semibold">
-          <span>已计价小计</span>
+          <span>已计价与柜体估算小计</span>
           <span className="tabular-nums text-accent">¥{totalCost.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
       </section>
@@ -637,7 +681,7 @@ export function StatsPanel() {
           <p className="text-[11px] text-zinc-400">墙段数</p>
         </div>
       </section>
-      <p className="text-[10px] leading-relaxed text-zinc-400">地面默认单价为参考估价，可在房间属性中调整；家具单价需按实际商品填写。当前未关联电商 SKU，金额不含人工、辅料、运输及安装。</p>
+      <p className="text-[10px] leading-relaxed text-zinc-400">地面默认单价为参考估价，可在房间属性中调整；柜体延米费率由项目自行填写。当前未关联电商 SKU，金额不含人工、辅料、运输及安装，不构成正式报价。</p>
     </div>
   );
 }

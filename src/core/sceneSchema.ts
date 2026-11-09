@@ -5,13 +5,18 @@ import { assetCatalog, materialCatalog } from './assets';
 import { MaterialSchema } from './materialSchema';
 import { FlooringSchema } from './flooring';
 import { HexColorSchema } from './schemaPrimitives';
-import { MAX_FURNITURE_UNIT_PRICE } from './pricingLimits';
+import { MAX_CABINET_PRICE_PER_LINEAR_METER, MAX_FURNITURE_UNIT_PRICE } from './pricingLimits';
 
 const MAX_COORDINATE_MM = 1_000_000;
 const coordinate = z.number().finite().min(-MAX_COORDINATE_MM).max(MAX_COORDINATE_MM);
 const positiveMeasure = z.number().finite().positive().max(MAX_COORDINATE_MM);
 const identifier = z.string().trim().min(1).max(120);
 const vec2Schema = z.tuple([coordinate, coordinate]);
+const cabinetPricingSchema = z.object({
+  basePerLinearMeter: z.number().finite().min(0).max(MAX_CABINET_PRICE_PER_LINEAR_METER).optional(),
+  wallPerLinearMeter: z.number().finite().min(0).max(MAX_CABINET_PRICE_PER_LINEAR_METER).optional(),
+  tallPerLinearMeter: z.number().finite().min(0).max(MAX_CABINET_PRICE_PER_LINEAR_METER).optional(),
+}).strict().refine((rules) => Object.values(rules).some((value) => value !== undefined), 'At least one cabinet pricing rule is required');
 
 const rectSchema = z.tuple([coordinate, coordinate, coordinate, coordinate]).superRefine((rect, ctx) => {
   if (rect[0] >= rect[2] || rect[1] >= rect[3]) {
@@ -120,6 +125,7 @@ export const SceneDocumentSchema = z.object({
   assets: z.array(CustomAssetSchema).max(1000).optional(),
   assetSnapshots: z.array(AssetDefinitionSchema).max(1000).optional(),
   materialSnapshots: z.array(MaterialSchema).max(1000).optional(),
+  cabinetPricing: cabinetPricingSchema.optional(),
 }).strict().superRefine((document, ctx) => {
   const knownAssets = assetCatalog([
     ...(document.assetSnapshots ?? []), ...(document.assets ?? []),
