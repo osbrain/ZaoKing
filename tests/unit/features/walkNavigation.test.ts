@@ -37,6 +37,26 @@ describe('3D walk navigation', () => {
     expect(canWalkTo(level, [5200, 2500], [sofa])).toBe(false);
   });
 
+  it('allows movement through a wall marked for demolition', () => {
+    const level = buildBlankDocument().levels[0];
+    level.rooms.push(
+      { id: 'left', name: '左侧房间', poly: [[0, 0], [2400, 0], [2400, 5000], [0, 5000]], floorMaterialId: 'wood' },
+      { id: 'right', name: '右侧房间', poly: [[2600, 0], [5000, 0], [5000, 5000], [2600, 5000]], floorMaterialId: 'wood' },
+    );
+    level.walls.push({ id: 'demo', x0: 2400, y0: 0, x1: 2600, y1: 5000, kind: 'partition', height: 2800, renovation: 'demolished' });
+
+    for (let x = 2200; x <= 2800; x += 40) expect(canWalkTo(level, [x, 2500])).toBe(true);
+    level.walls[0].renovation = undefined;
+    expect(canWalkTo(level, [2500, 2500])).toBe(false);
+  });
+
+  it('does not allow leaving the floor through a demolished exterior wall', () => {
+    const level = buildBlankDocument().levels[0];
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[200, 0], [5000, 0], [5000, 5000], [200, 5000]], floorMaterialId: 'wood' });
+    level.walls.push({ id: 'exterior', x0: 0, y0: 0, x1: 200, y1: 5000, kind: 'exterior', height: 2800, renovation: 'demolished' });
+    expect(canWalkTo(level, [100, 2500])).toBe(false);
+  });
+
   it('allows walking through an open door and blocks the same doorway when closed', () => {
     const level = buildBlankDocument().levels[0];
     level.rooms.push(

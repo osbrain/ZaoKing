@@ -19,6 +19,7 @@ export interface FlooringSpec {
 }
 
 export type WallKind = 'bearing' | 'exterior' | 'partition' | 'low';
+export type WallRenovationStatus = 'new' | 'demolished';
 
 /** 轴对齐墙矩形（与原型数据一致；V1 墙体绘制工具可迁移为中心线模型） */
 export interface Wall {
@@ -32,6 +33,8 @@ export interface Wall {
   height: number;
   /** 可选的墙体表面颜色覆盖 */
   color?: string;
+  /** Missing means the existing wall is retained; legacy documents need no migration. */
+  renovation?: WallRenovationStatus;
 }
 
 export interface Room {

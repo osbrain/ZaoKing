@@ -32,6 +32,21 @@ describe('shared layout constraints', () => {
     expect(analyzeLevelLayout(level, assets).some((issue) => issue.code === 'overlap')).toBe(true);
   });
 
+  it('ignores openings attached to demolished walls and flags structural demolition for review', () => {
+    const document = buildBlankDocument();
+    const level = document.levels[0];
+    const sofa = resolveAssetByQuery('三人沙发')!;
+    level.rooms.push({ id: 'living', name: '客厅', poly: [[0, 0], [4000, 0], [4000, 4000], [0, 4000]], floorMaterialId: 'wood' });
+    level.walls.push({ id: 'bearing-1', x0: 0, y0: 1000, x1: 200, y1: 3000, kind: 'bearing', height: 2800, renovation: 'demolished' });
+    level.openings.push({ id: 'door-1', kind: 'door', rect: [0, 1700, 200, 2600], height: 2100, sill: 0 });
+    const instance = { id: 'sofa-1', assetId: sofa.id, t: { x: 100, y: 2150, rot: 0 }, size: { w: 900, d: 900 } };
+
+    expect(validateComponentPlacement(level, instance, [sofa]).issues.some((issue) => issue.code === 'opening-blocked')).toBe(false);
+    expect(analyzeLevelLayout(level, [sofa])).toContainEqual(expect.objectContaining({
+      code: 'structural-demolition', wallId: 'bearing-1', severity: 'review',
+    }));
+  });
+
   it('allows cooktops and sinks to sit on kitchen counters without allowing furniture to overlap them', () => {
     const doc = buildBlankDocument();
     const level = doc.levels[0];

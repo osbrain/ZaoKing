@@ -28,6 +28,8 @@ describe('editor plan layers', () => {
 
     expect(useEditorStore.getState().selection).toBeNull();
     expect(useEditorStore.getState().tool).toBe('select');
+    useEditorStore.getState().select(null);
+    expect(useEditorStore.getState().selection).toBeNull();
   });
 
   it('clears a 3D furniture selection when returning to the 2D floor layer', () => {
@@ -37,5 +39,16 @@ describe('editor plan layers', () => {
     useEditorStore.getState().setViewMode('2d');
 
     expect(useEditorStore.getState().selection).toBeNull();
+  });
+
+  it('keeps only wall selection and prevents drawing tools in the renovation layer', () => {
+    useEditorStore.getState().select({ kind: 'furn', id: 'sofa-1' });
+    useEditorStore.getState().setPlanLayer('renovation');
+    expect(useEditorStore.getState().selection).toBeNull();
+    useEditorStore.getState().select({ kind: 'wall', id: 'wall-1' });
+    useEditorStore.getState().setTool('door');
+
+    expect(useEditorStore.getState().selection).toEqual({ kind: 'wall', id: 'wall-1' });
+    expect(useEditorStore.getState().tool).toBe('select');
   });
 });

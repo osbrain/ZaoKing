@@ -84,7 +84,9 @@ export default function AssetLibrary() {
           <option value="all">全部分类</option>{categories.map(cat => <option key={cat}>{cat}</option>)}
         </select>
         <p className="text-[11px] leading-relaxed text-zinc-400">
-          {canPlaceAssets ? '点击放入选中房间，默认最大房间；自动寻找空位，放置后可拖动和旋转。' : '铺装图层中可选择房间并调整地面；切换到布置图层后可放置组件。'}
+          {canPlaceAssets ? '点击放入选中房间，默认最大房间；自动寻找空位，放置后可拖动和旋转。'
+            : planLayer === 'floor' ? '铺装图层中可选择房间并调整地面；切换到布置图层后可放置组件。'
+              : '拆改图层中可选择墙体并设置状态；切换到布置图层后可放置组件。'}
         </p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">

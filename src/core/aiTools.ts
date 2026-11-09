@@ -46,6 +46,10 @@ export function parseAiToolCalls(calls: unknown): DesignOp[] {
             : [];
         case 'set_wall_color':
           return text('query') ? [{ op: fn.name, levelId, room, wallId: text('wallId') || undefined, query: text('query') }] : [];
+        case 'set_wall_renovation':
+          return text('wallId') && ['retained', 'new', 'demolished'].includes(text('status'))
+            ? [{ op: fn.name, levelId, wallId: text('wallId'), status: text('status') as 'retained' | 'new' | 'demolished' }]
+            : [];
         case 'ask_user':
           return text('question') ? [{ op: fn.name, question: text('question') }] : [];
         default:

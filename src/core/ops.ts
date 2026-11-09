@@ -6,7 +6,7 @@
  * ============================================================ */
 
 import type { Cmd } from './commands';
-import type { Asset, ComponentInstance, Level, Room, SceneDocument } from './types';
+import type { Asset, ComponentInstance, Level, Room, SceneDocument, WallRenovationStatus } from './types';
 import { uid } from './types';
 import {
   assetCatalog,
@@ -27,6 +27,7 @@ export type DesignOp =
   | { op: 'set_component_parameters'; levelId?: string; room?: string; target?: string; instanceId?: string; compartments?: number; openCompartments?: number; shelves?: number; drawers?: number; seats?: number }
   | { op: 'set_component_color'; levelId?: string; room?: string; target?: string; instanceId?: string; query: string }
   | { op: 'set_wall_color'; levelId?: string; room?: string; wallId?: string; query: string }
+  | { op: 'set_wall_renovation'; levelId?: string; wallId: string; status: 'retained' | WallRenovationStatus }
   | { op: 'set_floor_material'; levelId?: string; room?: string; query: string }
   | { op: 'ask_user'; question: string };
 
@@ -278,6 +279,16 @@ export function executeOps(doc: SceneDocument, ops: DesignOp[]): OpOutcome {
         if (!walls.length) { log.push('⚠ 没有找到该房间相邻的墙体'); break; }
         cmds.push(...walls.map((wall) => ({ levelId: level.id, type: 'setWall' as const, id: wall.id, color })));
         log.push(`✓ 已将 ${walls.length} 段墙体颜色设为 ${color}`);
+        break;
+      }
+      case 'set_wall_renovation': {
+        const wall = level.walls.find((candidate) => candidate.id === op.wallId);
+        if (!wall) { log.push(`⚠ 未找到墙体「${op.wallId}」`); break; }
+        const renovation = op.status === 'retained' ? null : op.status;
+        cmds.push({ levelId: level.id, type: 'setWall', id: wall.id, renovation });
+        log.push(op.status === 'demolished' && (wall.kind === 'bearing' || wall.kind === 'exterior')
+          ? `⚠ 已将墙体 ${wall.id} 标记为拆除；该墙为${wall.kind === 'bearing' ? '承重墙' : '外墙'}，必须由专业人员现场核验结构与审批条件，模型标记不构成施工许可。`
+          : `✓ 已将墙体 ${wall.id} 标记为${op.status === 'retained' ? '保留' : op.status === 'new' ? '新建' : '拆除'}`);
         break;
       }
       case 'set_floor_material': {

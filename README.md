@@ -32,6 +32,7 @@ Inspect room structure, furniture placement, materials, and spatial checks in a 
 
 - **Create and edit floor plans.** Work with rooms, walls, doors, windows, openings, dimensions, a toggleable grid, and orientation indicators.
 - **Switch between layout and floor-finish layers.** Configure room-specific tile size, grout, laying pattern, and start point; compare material quantity and cost estimates. Floor mode hides furniture and disables furniture placement and structural drawing tools while keeping the plan context visible.
+- **Plan renovation work.** Mark walls as retained, new, or demolished; see matching 2D symbols and 3D previews, and ask the AI assistant to change a wall by ID. Structural wall demolition is flagged for professional review.
 - **Control the canvas display.** Toggle room labels and furniture visibility in both 2D and 3D views.
 - **Move between 2D and 3D.** Edit a plan and inspect the corresponding room layout in a 3D scene backed by the same design data.
 - **Arrange and customize furniture.** Add catalog components, place and rotate them, adjust width, depth, and height, and edit supported component parameters.
@@ -46,7 +47,7 @@ AI recognition and layout checks are design aids. They do not certify measuremen
 
 ## How the Design Data Works
 
-The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. A room can store an optional floor-finish override for tile dimensions, grout, laying pattern, and world-space origin; older rooms continue to use their material defaults. Placed furniture can carry an instance-specific unit price, and material snapshots can retain project-specific prices. The 2D canvas and the Three.js scene render the same geometry while sharing editor display controls.
+The editor keeps a structured `SceneDocument` as the source for the design. It contains levels, walls, rooms, openings, furniture instances, and optional project-specific asset and material snapshots. Measurements are stored in millimeters. Walls can carry an optional renovation state (`new` or `demolished`); a missing state means retained, so older documents need no migration. A room can store an optional floor-finish override for tile dimensions, grout, laying pattern, and world-space origin; older rooms continue to use their material defaults. Placed furniture can carry an instance-specific unit price, and material snapshots can retain project-specific prices. The 2D canvas and the Three.js scene render the same geometry while sharing editor display controls.
 
 The main interaction flow is:
 

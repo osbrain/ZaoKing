@@ -12,6 +12,19 @@ describe('level-scoped commands', () => {
     expect(updated.levels[0].walls).toHaveLength(1);
   });
 
+  it('marks a wall as new or demolished and restores retained as the legacy default', () => {
+    const document = buildBlankDocument();
+    document.levels[0].walls = [{ id: 'wall-1', x0: 0, y0: 0, x1: 1000, y1: 200, kind: 'partition', height: 2800 }];
+    const demolished = applyCmds(document, [{ type: 'setWall', id: 'wall-1', renovation: 'demolished' }]);
+    const newWall = applyCmds(demolished, [{ type: 'setWall', id: 'wall-1', renovation: 'new' }]);
+    const retained = applyCmds(newWall, [{ type: 'setWall', id: 'wall-1', renovation: null }]);
+
+    expect(demolished.levels[0].walls[0].renovation).toBe('demolished');
+    expect(newWall.levels[0].walls[0].renovation).toBe('new');
+    expect(retained.levels[0].walls[0]).not.toHaveProperty('renovation');
+    expect(document.levels[0].walls[0]).not.toHaveProperty('renovation');
+  });
+
   it('requires an explicit target when a document has multiple levels', () => {
     const document = buildBlankDocument();
     document.levels.push({ id: 'lv2', name: '二层', elevation: 3000, walls: [], rooms: [], openings: [], instances: [] });

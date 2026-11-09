@@ -12,7 +12,7 @@ export type Selection =
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window';
 export type WallPreset = 'exterior' | 'partition' | 'low';
-export type PlanLayer = 'layout' | 'floor';
+export type PlanLayer = 'layout' | 'floor' | 'renovation';
 
 export type Camera = { cx: number; cy: number; scale: number };
 
@@ -66,24 +66,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setViewMode: (m) => set((state) => ({
     viewMode: m,
-    selection: m === '2d' && state.planLayer === 'floor' && state.selection?.kind !== 'room'
-      ? null
-      : state.selection,
+    selection: m !== '2d' ? state.selection
+      : state.planLayer === 'floor' && state.selection?.kind !== 'room' ? null
+        : state.planLayer === 'renovation' && state.selection?.kind !== 'wall' ? null : state.selection,
   })),
   setPlanLayer: (planLayer) => set((state) => ({
     planLayer,
     tool: 'select',
-    selection: planLayer === 'floor' && state.selection?.kind !== 'room' ? null : state.selection,
+    selection: planLayer === 'layout' ? state.selection
+      : planLayer === 'floor' && state.selection?.kind !== 'room' ? null
+        : planLayer === 'renovation' && state.selection?.kind !== 'wall' ? null : state.selection,
   })),
   setCamera: (c) => set({ camera: c }),
   select: (s) => {
     const state = get();
-    if (state.viewMode === '2d' && state.planLayer === 'floor' && s && s.kind !== 'room') return;
+    if (s && state.viewMode === '2d' && state.planLayer !== 'layout'
+      && (state.planLayer === 'floor' ? s?.kind !== 'room' : s?.kind !== 'wall')) return;
     set({ selection: s });
     if (s) set({ rightTab: 'props' });
   },
   setTool: (t) => set((state) => ({
-    tool: state.viewMode === '2d' && state.planLayer === 'floor' && t !== 'select' ? 'select' : t,
+    tool: state.viewMode === '2d' && state.planLayer !== 'layout' && t !== 'select' ? 'select' : t,
   })),
   setWallPreset: (p) => set({ wallPreset: p }),
   setCursor: (c) => set({ cursor: c }),

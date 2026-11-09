@@ -7,6 +7,7 @@ import type { Asset, ComponentInstance, Level, Opening, Room, Vec2 } from './typ
 import { instanceRef } from './types';
 import { assetById } from './assets';
 import { analyzeDoorApproaches, analyzeFrontAccess, analyzeSlidingDoorPockets, analyzeUsageClearances } from './clearance';
+import { openingOnDemolishedWall } from './renovation';
 
 export const polyArea = (poly: Vec2[]): number =>
   Math.abs(
@@ -261,7 +262,8 @@ export function validateComponentPlacement(
     issues.push({ code: 'outside-room', message: `家具越界：超出「${room.name}」边界` });
   }
 
-  const obstructedDoor = level.openings.find((opening) => {
+  const activeOpenings = level.openings.filter((opening) => !openingOnDemolishedWall(opening, level));
+  const obstructedDoor = activeOpenings.find((opening) => {
     const swing = doorSwingPolygon(opening);
     return Boolean(swing && orientedRectanglesOverlap(corners, swing));
   });
@@ -272,7 +274,7 @@ export function validateComponentPlacement(
     });
   }
 
-  const blockedOpening = level.openings.find((opening) =>
+  const blockedOpening = activeOpenings.find((opening) =>
     opening.kind !== 'window' && orientedRectanglesOverlap(corners, openingFootprint(opening)));
   if (blockedOpening) {
     const openingName = blockedOpening.kind === 'entry' ? '入户门' : blockedOpening.kind === 'sliding' ? '推拉门' : '房门';
@@ -303,16 +305,23 @@ export function validateComponentPlacement(
 }
 
 export interface LayoutCheck {
-  code: PlacementIssue['code'] | 'usage-clearance' | 'aisle-clearance' | 'front-access-clearance' | 'sliding-pocket';
+  code: PlacementIssue['code'] | 'usage-clearance' | 'aisle-clearance' | 'front-access-clearance' | 'sliding-pocket' | 'structural-demolition';
   message: string;
   instanceId?: string;
   openingId?: string;
+  wallId?: string;
   relatedInstanceId?: string;
   severity?: 'review';
 }
 
 export function analyzeLevelLayout(level: Level, assets: readonly Asset[] = []): LayoutCheck[] {
   const checks: LayoutCheck[] = [];
+  for (const wall of level.walls) {
+    if (wall.renovation === 'demolished' && (wall.kind === 'bearing' || wall.kind === 'exterior')) {
+      checks.push({ code: 'structural-demolition', wallId: wall.id, severity: 'review',
+        message: `${wall.kind === 'bearing' ? '承重墙' : '外墙'}已标记拆除；须由专业人员核验结构、物业/主管部门审批和现场条件。此提示不是施工许可。` });
+    }
+  }
   for (const instance of level.instances) {
     const validation = validateComponentPlacement(level, instance, assets, { checkCollisions: false });
     for (const issue of validation.issues) {
@@ -374,7 +383,8 @@ export function analyzeLevelLayout(level: Level, assets: readonly Asset[] = []):
       relatedInstanceId: clearance.relatedInstanceId,
     });
   }
-  const aisleClearances = analyzeDoorApproaches(level.openings, level.rooms, clearanceShapes);
+  const activeOpenings = level.openings.filter((opening) => !openingOnDemolishedWall(opening, level));
+  const aisleClearances = analyzeDoorApproaches(activeOpenings, level.rooms, clearanceShapes);
   for (const clearance of aisleClearances) {
     checks.push({
       code: 'aisle-clearance',
@@ -383,7 +393,7 @@ export function analyzeLevelLayout(level: Level, assets: readonly Asset[] = []):
       openingId: clearance.openingId,
     });
   }
-  const slidingPocketChecks = analyzeSlidingDoorPockets(level.openings, clearanceShapes);
+  const slidingPocketChecks = analyzeSlidingDoorPockets(activeOpenings, clearanceShapes);
   for (const clearance of slidingPocketChecks) {
     checks.push({
       code: 'sliding-pocket',

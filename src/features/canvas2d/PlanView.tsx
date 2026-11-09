@@ -15,6 +15,7 @@ import { validateComponentPlacement } from '@/core/geometry';
 import { uid, type ComponentInstance, type Level, type Opening, type Vec2, type Wall } from '@/core/types';
 import { dimsSvg, openingsSvg, patternsDefs, roomFlooringDefs } from '@/core/symbols2d';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
+import { openingsForRenovatedLevel, renovationPatternDefs } from '@/core/renovation';
 import OrientationCompass from '@/features/editor/OrientationCompass';
 import { OpeningOverlay, FurnLayer, LabelsLayer, RoomsLayer, SelLayer, WallsLayer } from './PlanLayers';
 import { axisLock, centerInRect, GRID, MIN_WALL, normRect, openingOnWall, planViewBounds, snapPoint, wallRectFromSegment, WALL_PRESETS, type DragState, type Rect, type WallEdit } from './planGeometry';
@@ -171,6 +172,7 @@ export default function PlanView() {
       if (e.button !== 0) return;
       e.stopPropagation();
       select({ kind: 'wall', id: wall.id });
+      if (useEditorStore.getState().planLayer === 'renovation') return;
       const sx = e.clientX;
       const sy = e.clientY;
       let dx = 0;
@@ -240,7 +242,7 @@ export default function PlanView() {
   const onSvgDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if (planLayer === 'floor' && tool !== 'select') return;
+      if (planLayer !== 'layout' && tool !== 'select') return;
       if (tool === 'select') {
         // 空白处：拖拽平移 / 点按取消选择
         const start = { x: e.clientX, y: e.clientY, cam: { ...useEditorStore.getState().camera } };
@@ -332,7 +334,7 @@ export default function PlanView() {
   const onSvgMove = useCallback(
     (e: React.PointerEvent) => {
       if (!level) return;
-      if (planLayer === 'floor' && tool !== 'select') return;
+      if (planLayer !== 'layout' && tool !== 'select') return;
       if (tool === 'select') {
         const w = toWorld(e.clientX, e.clientY);
         setCursor({ x: Math.round(w.x / 10) * 10, y: Math.round(w.y / 10) * 10 });
@@ -373,6 +375,8 @@ export default function PlanView() {
   const vb = `${camera.cx - vw / 2} ${camera.cy - vh / 2} ${vw} ${vh}`;
   const selecting = tool === 'select';
   const layoutLayer = planLayer === 'layout';
+  const renovationLayer = planLayer === 'renovation';
+  const visibleLevel = { ...level, openings: openingsForRenovatedLevel(level) };
   const blankPlan = level.walls.length === 0 && level.rooms.length === 0;
 
   const TOOL_HINTS: Record<Tool, string> = {
@@ -396,15 +400,16 @@ export default function PlanView() {
         onPointerMove={onSvgMove}
         onPointerLeave={onSvgLeave}
       >
-        <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) + roomFlooringDefs(level.rooms, materials) }} />
+        <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) + roomFlooringDefs(level.rooms, materials) + renovationPatternDefs() }} />
         {showGrid && <rect x={camera.cx - vw / 2} y={camera.cy - vh / 2} width={vw} height={vh} fill="url(#p-grid)" pointerEvents="none" />}
-        <RoomsLayer level={level} selection={selection} onSelect={select} interactive={selecting} />
-        <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting && layoutLayer} />
-        <g dangerouslySetInnerHTML={{ __html: openingsSvg(level) }} pointerEvents="none" />
-        <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting && layoutLayer} />
+        <RoomsLayer level={level} selection={selection} onSelect={select} interactive={selecting && !renovationLayer} />
+        <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag}
+          interactive={selecting && (layoutLayer || renovationLayer)} renovationMode={renovationLayer} />
+        <g dangerouslySetInnerHTML={{ __html: openingsSvg(visibleLevel) }} pointerEvents="none" />
+        <OpeningOverlay level={visibleLevel} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting && layoutLayer} />
         {layoutLayer && showFurniture && <FurnLayer assets={assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />}
         {showRoomNames && <LabelsLayer level={level} materials={materials} />}
-        <g dangerouslySetInnerHTML={{ __html: dimsSvg(level) }} pointerEvents="none" />
+        <g dangerouslySetInnerHTML={{ __html: dimsSvg(visibleLevel) }} pointerEvents="none" />
         {/* 绘制预览 */}
         {wallDraft && Math.hypot(wallDraft.b[0] - wallDraft.a[0], wallDraft.b[1] - wallDraft.a[1]) > 10 && (() => {
           const p = WALL_PRESETS[wallPreset];
@@ -436,8 +441,8 @@ export default function PlanView() {
           />
         )}
         <g data-export-ignore="true">
-          {(layoutLayer || selection?.kind === 'room') && (showFurniture || selection?.kind !== 'furn') &&
-            <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />}
+          {(layoutLayer || selection?.kind === 'room' || renovationLayer) && (showFurniture || selection?.kind !== 'furn') &&
+            <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} editableWalls={layoutLayer} />}
         </g>
       </svg>
 
@@ -445,6 +450,7 @@ export default function PlanView() {
         {([
           ['layout', '布置'],
           ['floor', '铺装'],
+          ['renovation', '拆改'],
         ] as const).map(([layer, label]) => (
           <button key={layer} type="button" aria-pressed={planLayer === layer}
             onClick={() => useEditorStore.getState().setPlanLayer(layer)}
@@ -453,6 +459,12 @@ export default function PlanView() {
           </button>
         ))}
       </div>
+
+      {renovationLayer && <div aria-label="拆改图例" className="absolute left-1/2 top-12 flex -translate-x-1/2 items-center gap-3 rounded-md border border-zinc-200 bg-white/95 px-3 py-1.5 text-[10px] text-zinc-600 shadow-sm">
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 border border-zinc-500 bg-zinc-400" />保留</span>
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 border border-emerald-700 bg-emerald-100" />新建</span>
+        <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 border border-red-700 bg-red-100" />拆除</span>
+      </div>}
 
       {/* 工具条 */}
       <div className="absolute left-3 top-3 flex flex-col gap-0.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm">
@@ -528,7 +540,9 @@ export default function PlanView() {
         <button className="h-8 w-8 border-t border-zinc-100 text-xs hover:bg-zinc-50" onClick={fit} title="适应窗口">适</button>
       </div>
       <p className="pointer-events-none absolute bottom-3 right-3 text-xs text-zinc-400">
-        {planLayer === 'floor' ? '选择房间以调整地面材质和单价 · 滚轮缩放' : TOOL_HINTS[tool]}
+        {planLayer === 'floor' ? '选择房间以调整地面材质和单价 · 滚轮缩放'
+          : renovationLayer ? '选择墙体并设置保留、新建或拆除状态 · 结构墙标记需要专业核验'
+            : TOOL_HINTS[tool]}
       </p>
 
       {blankPlan && (

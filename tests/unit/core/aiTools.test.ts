@@ -42,4 +42,13 @@ describe('parseAiToolCalls', () => {
       instanceId: undefined, openCompartments: 2, shelves: 1,
     }]);
   });
+
+  it('requires an explicit wall ID and supported status for renovation edits', () => {
+    expect(parseAiToolCalls([{ function: {
+      name: 'set_wall_renovation', arguments: JSON.stringify({ wallId: 'wall-1', status: 'demolished' }),
+    } }])).toEqual([{ op: 'set_wall_renovation', levelId: undefined, wallId: 'wall-1', status: 'demolished' }]);
+    expect(parseAiToolCalls([{ function: {
+      name: 'set_wall_renovation', arguments: JSON.stringify({ wallId: 'wall-1', status: 'maybe' }),
+    } }])).toEqual([]);
+  });
 });

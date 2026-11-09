@@ -12,6 +12,7 @@ import { estimateFlooring, resolveFlooring } from '@/core/flooring';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import { MAX_FURNITURE_UNIT_PRICE, MAX_MATERIAL_PRICE_PER_SQM } from '@/core/pricingLimits';
 import type { FlooringSpec } from '@/core/types';
+import { wallStatusLabel } from '@/core/renovation';
 
 /* ---------- 数字输入（失焦/回车提交命令） ---------- */
 
@@ -346,6 +347,20 @@ export function PropsPanel() {
             className="h-7 w-14 cursor-pointer rounded border border-zinc-200" />
         </label>
         <p className="text-[11px] text-zinc-400">墙上门窗：{onWall.length ? onWall.map((o) => (o.kind === 'window' ? '窗' : '门')).join('、') : '无'}</p>
+        <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
+          拆改状态
+          <select value={w.renovation ?? 'retained'}
+            onChange={(event) => run('设置墙体拆改状态', [{ type: 'setWall', id: w.id, renovation: event.target.value === 'retained' ? null : event.target.value as 'new' | 'demolished' }])}
+            className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-ink outline-none focus:border-accent">
+            <option value="retained">保留</option>
+            <option value="new">新建</option>
+            <option value="demolished">拆除</option>
+          </select>
+        </label>
+        {w.renovation === 'demolished' && (w.kind === 'bearing' || w.kind === 'exterior') &&
+          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-800">
+            {w.kind === 'bearing' ? '承重墙' : '外墙'}：必须由专业人员核验结构、审批和现场条件。模型标记不构成施工许可。
+          </p>}
         <p className="text-[11px] leading-relaxed text-zinc-400">提示：拖动墙身整体移动（墙上门窗跟随）；拖动端点调整长度；Delete 删除。</p>
         <button
           className="w-full rounded-md border border-red-200 py-1.5 text-xs text-red-600 hover:bg-red-50"
@@ -510,13 +525,14 @@ export function StatsPanel() {
               const instance = level.instances.find((item) => item.id === check.instanceId);
               const related = level.instances.find((item) => item.id === check.relatedInstanceId);
               const opening = level.openings.find((item) => item.id === check.openingId);
+              const wall = level.walls.find((item) => item.id === check.wallId);
               const openingName = opening?.kind === 'entry' ? '入户门'
                 : opening?.kind === 'sliding' ? '推拉门'
                   : opening ? '房门' : undefined;
-              const name = instance ? assetById(instance.assetId, assets)?.name ?? '家具' : openingName ?? '家具';
+              const name = instance ? assetById(instance.assetId, assets)?.name ?? '家具' : openingName ?? (wall ? `墙体（${wallStatusLabel(wall)}）` : '家具');
               const relatedName = related ? assetById(related.assetId, assets)?.name : undefined;
               return (
-                <li key={`${check.instanceId ?? check.openingId ?? 'layout'}-${check.code}-${check.relatedInstanceId ?? index}`} className={`text-[11px] leading-relaxed ${check.severity === 'review' ? 'text-amber-800' : 'text-red-800'}`}>
+                <li key={`${check.instanceId ?? check.openingId ?? check.wallId ?? 'layout'}-${check.code}-${check.relatedInstanceId ?? index}`} className={`text-[11px] leading-relaxed ${check.severity === 'review' ? 'text-amber-800' : 'text-red-800'}`}>
                   {name}：{check.message}{relatedName ? `（与${relatedName}）` : ''}
                 </li>
               );

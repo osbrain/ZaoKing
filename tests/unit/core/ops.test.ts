@@ -25,6 +25,20 @@ describe('level-aware design operations', () => {
     expect(outcome.log).toContain('💬 请先指定要修改的楼层');
   });
 
+  it('sets demolition status by explicit wall ID and warns on structural walls', () => {
+    const document = buildBlankDocument();
+    document.levels[0].walls = [
+      { id: 'partition-1', x0: 0, y0: 0, x1: 1000, y1: 200, kind: 'partition', height: 2800 },
+      { id: 'bearing-1', x0: 1200, y0: 0, x1: 1400, y1: 1000, kind: 'bearing', height: 2800 },
+    ];
+
+    const partition = executeOps(document, [{ op: 'set_wall_renovation', wallId: 'partition-1', status: 'demolished' }]);
+    const bearing = executeOps(document, [{ op: 'set_wall_renovation', wallId: 'bearing-1', status: 'demolished' }]);
+
+    expect(partition.cmds).toEqual([{ levelId: 'lv1', type: 'setWall', id: 'partition-1', renovation: 'demolished' }]);
+    expect(bearing.log[0]).toContain('不构成施工许可');
+  });
+
   it('attaches generated commands to the explicitly selected floor', () => {
     const document = buildSeedDocument();
     const livingRoom = document.levels[0].rooms.find((room) => room.id === 'living')!;

@@ -19,19 +19,28 @@ import { documentAssets, documentMaterials } from '@/core/sceneResources';
 import OrientationCompass from '@/features/editor/OrientationCompass';
 import WalkModeControls from './WalkModeControls';
 import { findWalkSpawn } from './walkNavigation';
+import { openingsForRenovatedLevel } from '@/core/renovation';
 
 type ModelFactory = ReturnType<typeof createModelFactory>;
 
-function Solid({ rect, bottom, top, color, cap = true }: {
-  rect: number[]; bottom: number; top: number; color?: string; cap?: boolean;
+function Solid({ rect, bottom, top, color, renovation, cap = true }: {
+  rect: number[]; bottom: number; top: number; color?: string; renovation?: 'new' | 'demolished'; cap?: boolean;
 }) {
   const [x0, y0, x1, y1] = rect;
   if (top <= bottom || x1 <= x0 || y1 <= y0) return null;
+  if (renovation === 'demolished') return (
+    <mesh position={[(x0 + x1) / 2000, (bottom + top) / 2000, -(y0 + y1) / 2000]}>
+      <boxGeometry args={[(x1 - x0) / 1000, (top - bottom) / 1000, (y1 - y0) / 1000]} />
+      <meshBasicMaterial color="#c43e38" wireframe transparent opacity={0.52} depthWrite={false} />
+    </mesh>
+  );
   return (
     <mesh position={[(x0 + x1) / 2000, (bottom + top) / 2000, -(y0 + y1) / 2000]} castShadow receiveShadow>
       <boxGeometry args={[(x1 - x0) / 1000, (top - bottom) / 1000, (y1 - y0) / 1000]} />
       {Array.from({ length: 6 }, (_, i) => (
-        <meshStandardMaterial key={i} attach={'material-' + i} color={cap && i === 2 ? color ?? '#34312d' : color ?? '#e4e0d8'} roughness={cap && i === 2 ? 0.9 : 0.92} />
+        <meshStandardMaterial key={i} attach={'material-' + i}
+          color={color ?? (renovation === 'new' ? (cap && i === 2 ? '#275a42' : '#d9eadf') : cap && i === 2 ? '#34312d' : '#e4e0d8')}
+          roughness={cap && i === 2 ? 0.9 : 0.92} />
       ))}
     </mesh>
   );
@@ -103,10 +112,11 @@ function Architecture({ level, cutHeight, openDoors, onToggleDoor }: {
   onToggleDoor: (doorId: string) => void;
 }) {
   const solids = useMemo(() => buildWallSolids(level, cutHeight), [level.walls, level.openings, cutHeight]);
+  const openings = openingsForRenovatedLevel(level);
   return (
     <group>
-      {solids.map((s, i) => <Solid key={i} rect={[s.x0, s.y0, s.x1, s.y1]} bottom={s.bottom} top={s.top} color={s.color} />)}
-      {level.openings.map(o => o.kind === 'window' || o.kind === 'sliding'
+      {solids.map((s, i) => <Solid key={i} rect={[s.x0, s.y0, s.x1, s.y1]} bottom={s.bottom} top={s.top} color={s.color} renovation={s.renovation} />)}
+      {openings.map(o => o.kind === 'window' || o.kind === 'sliding'
         ? <WindowFrame key={o.id} opening={o} cutHeight={cutHeight} />
         : <DoorLeaf key={o.id} opening={o} cutHeight={cutHeight} open={openDoors[o.id] ?? true}
             onToggle={() => onToggleDoor(o.id)} />)}

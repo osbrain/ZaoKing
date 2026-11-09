@@ -39,12 +39,14 @@ export const WallsLayer = React.memo(function WallsLayer({
   selection,
   onWallDown,
   interactive,
+  renovationMode,
 }: {
   level: Level;
   wallEdit: WallEdit | null;
   selection: Selection;
   onWallDown: (wall: Wall, event: React.PointerEvent) => void;
   interactive: boolean;
+  renovationMode?: boolean;
 }) {
   const moving = level.walls.find((wall) => wall.id === wallEdit?.id);
   return (
@@ -60,17 +62,20 @@ export const WallsLayer = React.memo(function WallsLayer({
           : wall.kind === 'low' ? '#e9e3d8'
           : wall.kind === 'exterior' ? '#8f897d'
           : '#a7a195');
+        const demolished = wall.renovation === 'demolished';
+        const newlyBuilt = wall.renovation === 'new';
         return (
-          <rect
-            key={wall.id}
-            x={x0} y={y0} width={x1 - x0} height={y1 - y0}
-            fill={fill}
-            stroke={wall.kind === 'low' ? '#8f897d' : selection?.kind === 'wall' && selection.id === wall.id ? '#b5653a' : 'none'}
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-            className={interactive ? 'cursor-move' : ''}
-            onPointerDown={interactive ? (event) => onWallDown(wall, event) : undefined}
-          />
+          <g key={wall.id} className={interactive ? renovationMode ? 'cursor-pointer' : 'cursor-move' : ''}
+            onPointerDown={interactive ? (event) => {
+              if (renovationMode) { event.stopPropagation(); onWallDown(wall, event); }
+              else onWallDown(wall, event);
+            } : undefined}>
+            <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0}
+              fill={demolished ? 'url(#wall-demolition-hatch)' : newlyBuilt ? '#dceee4' : fill}
+              stroke={demolished ? '#b33f38' : newlyBuilt ? '#357a56' : wall.kind === 'low' ? '#8f897d' : selection?.kind === 'wall' && selection.id === wall.id ? '#b5653a' : 'none'}
+              strokeWidth={demolished || newlyBuilt ? 2 : 1} strokeDasharray={demolished || newlyBuilt ? '7 4' : undefined}
+              vectorEffect="non-scaling-stroke" />
+          </g>
         );
       })}
       {wallEdit && !wallEdit.rect && wallEdit.dx !== undefined && moving &&
@@ -196,6 +201,7 @@ export const SelLayer = React.memo(function SelLayer({
   wallEdit,
   onRotate,
   onWallResize,
+  editableWalls = true,
 }: {
   assets?: readonly Asset[];
   level: Level;
@@ -205,6 +211,7 @@ export const SelLayer = React.memo(function SelLayer({
   wallEdit: WallEdit | null;
   onRotate: (instance: ComponentInstance, event: React.PointerEvent) => void;
   onWallResize: (wall: Wall, which: 'a' | 'b', event: React.PointerEvent) => void;
+  editableWalls?: boolean;
 }) {
   if (selection?.kind === 'furn') {
     const instance = level.instances.find((item) => item.id === selection.id);
@@ -295,7 +302,7 @@ export const SelLayer = React.memo(function SelLayer({
           stroke="#fff" strokeWidth={3 / scale} paintOrder="stroke" pointerEvents="none">
           {Math.round(Math.max(x1 - x0, y1 - y0))} mm
         </text>
-        {endpoints.map(([which, [x, y]]) => (
+        {editableWalls && endpoints.map(([which, [x, y]]) => (
           <circle
             key={which}
             cx={x} cy={y} r={radius} fill="#fff" stroke="#b5653a" strokeWidth={1.5} vectorEffect="non-scaling-stroke"

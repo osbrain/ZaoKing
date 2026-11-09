@@ -4,7 +4,7 @@
  * 用户操作、AI 操作、种子初始化共用同一入口（架构关键决策）。
  * ============================================================ */
 
-import type { ComponentInstance, CustomAsset, FlooringSpec, Opening, Room, SceneDocument, Wall } from './types';
+import type { ComponentInstance, CustomAsset, FlooringSpec, Opening, Room, SceneDocument, Wall, WallRenovationStatus } from './types';
 import { CustomAssetSchema } from './assetSchema';
 import { assetById, materialCatalog } from './assets';
 import { FlooringSchema } from './flooring';
@@ -25,7 +25,7 @@ type LevelCmd =
   /* ---- 户型编辑：墙体 ---- */
   | { levelId?: string; type: 'addWall'; wall: Wall }
   | { levelId?: string; type: 'deleteWall'; id: string }
-  | { levelId?: string; type: 'setWall'; id: string; rect?: [number, number, number, number]; kind?: Wall['kind']; height?: number; color?: string }
+  | { levelId?: string; type: 'setWall'; id: string; rect?: [number, number, number, number]; kind?: Wall['kind']; height?: number; color?: string; renovation?: WallRenovationStatus | null }
   /* ---- 户型编辑：房间地面 ---- */
   | { levelId?: string; type: 'addRoom'; room: Room }
   | { levelId?: string; type: 'deleteRoom'; id: string }
@@ -178,6 +178,10 @@ export function applyCmds(doc: SceneDocument, cmds: Cmd[]): SceneDocument {
             if (c.kind) w.kind = c.kind;
             if (c.height !== undefined) w.height = c.height;
             if (c.color !== undefined) w.color = c.color;
+            if (c.renovation !== undefined) {
+              if (c.renovation === null) delete w.renovation;
+              else w.renovation = c.renovation;
+            }
           }
           break;
         }

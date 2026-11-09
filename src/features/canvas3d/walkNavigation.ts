@@ -1,6 +1,7 @@
 import { assetById } from '@/core/assets';
 import { pointInPolyInclusive, polyArea } from '@/core/geometry';
 import { instanceRef, type Asset, type Level, type Opening, type Vec2 } from '@/core/types';
+import { openingOnDemolishedWall, openingsForRenovatedLevel } from '@/core/renovation';
 
 export const WALKER_RADIUS_MM = 180;
 
@@ -42,6 +43,22 @@ function pointInsideRoomUnion(point: Vec2, level: Level) {
   return level.rooms.some((room) => pointInPolyInclusive(point, room.poly));
 }
 
+/** Room polygons stop at wall faces. A removed internal wall joins those floors. */
+function pointInsideDemolishedPassage(point: Vec2, level: Level) {
+  const removedRects = [
+    ...level.walls.filter((wall) => wall.renovation === 'demolished'),
+    ...level.openings.filter((opening) => openingOnDemolishedWall(opening, level)).map(openingBounds),
+  ];
+  return removedRects.some((rect) => {
+    if (point[0] < rect.x0 || point[0] > rect.x1 || point[1] < rect.y0 || point[1] > rect.y1) return false;
+    const horizontal = rect.x1 - rect.x0 >= rect.y1 - rect.y0;
+    const sideA: Vec2 = horizontal ? [point[0], rect.y0 - 1] : [rect.x0 - 1, point[1]];
+    const sideB: Vec2 = horizontal ? [point[0], rect.y1 + 1] : [rect.x1 + 1, point[1]];
+    // An exterior demolition mark must not let the player leave the apartment.
+    return pointInsideRoomUnion(sideA, level) && pointInsideRoomUnion(sideB, level);
+  });
+}
+
 function openingIsPassable(opening: Opening, openDoors: Readonly<Record<string, boolean>>) {
   return opening.kind === 'sliding'
     || (opening.kind !== 'window' && openDoors[opening.id] !== false);
@@ -54,7 +71,7 @@ function pointInsidePassableThreshold(
   openDoors: Readonly<Record<string, boolean>>,
   radius: number,
 ) {
-  return level.openings.some((opening) => openingIsPassable(opening, openDoors)
+  return openingsForRenovatedLevel(level).some((opening) => openingIsPassable(opening, openDoors)
     && openingContainsWalker(opening, center, radius)
     && pointNearRect(sample, openingBounds(opening), radius));
 }
@@ -70,6 +87,7 @@ function playerFitsInRooms(point: Vec2, level: Level, openDoors: Readonly<Record
     ]);
   }
   return samples.every((sample) => pointInsideRoomUnion(sample, level)
+    || pointInsideDemolishedPassage(sample, level)
     || pointInsidePassableThreshold(sample, point, level, openDoors, radius));
 }
 
@@ -90,7 +108,7 @@ function pointHitsFurniture(point: Vec2, level: Level, assets: readonly Asset[],
 }
 
 function pointHitsClosedOpening(point: Vec2, level: Level, openDoors: Readonly<Record<string, boolean>>, radius: number) {
-  return level.openings.some((opening) => {
+  return openingsForRenovatedLevel(level).some((opening) => {
     if (opening.kind === 'window' || openDoors[opening.id] !== false) return false;
     const { x0, y0, x1, y1 } = openingBounds(opening);
     return pointNearRect(point, { x0, y0, x1, y1 }, radius);
@@ -99,8 +117,9 @@ function pointHitsClosedOpening(point: Vec2, level: Level, openDoors: Readonly<R
 
 function pointHitsWall(point: Vec2, level: Level, openDoors: Readonly<Record<string, boolean>>, radius: number) {
   return level.walls.some((wall) => {
+    if (wall.renovation === 'demolished') return false;
     if (!pointNearRect(point, wall, radius)) return false;
-    const passableOpening = level.openings.some((opening) => {
+    const passableOpening = openingsForRenovatedLevel(level).some((opening) => {
       if (!openingOverlapsWall(opening, wall)) return false;
       return openingIsPassable(opening, openDoors) && openingContainsWalker(opening, point, radius);
     });
@@ -176,7 +195,7 @@ export function findWalkSpawn(
 ): WalkSpawn | null {
   const rooms = [...level.rooms].sort((a, b) => polyArea(b.poly) - polyArea(a.poly));
   const destination = rooms[0] ? roomAnchor(rooms[0]) : null;
-  const entries = level.openings.filter((opening) => opening.kind === 'entry');
+  const entries = openingsForRenovatedLevel(level).filter((opening) => opening.kind === 'entry');
   const entryCandidates = entries.flatMap((opening) => {
     const [x0, y0, x1, y1] = opening.rect;
     const center: Vec2 = [(x0 + x1) / 2, (y0 + y1) / 2];
@@ -215,7 +234,7 @@ export function findWalkSpawn(
 
 export function nearestWalkDoor(level: Level, point: Vec2, maxDistance = 1400) {
   let nearest: { opening: Opening; distance: number } | null = null;
-  for (const opening of level.openings) {
+  for (const opening of openingsForRenovatedLevel(level)) {
     if (opening.kind !== 'door' && opening.kind !== 'entry' && opening.kind !== 'sliding') continue;
     const [x0, y0, x1, y1] = opening.rect;
     const center: Vec2 = [(x0 + x1) / 2, (y0 + y1) / 2];

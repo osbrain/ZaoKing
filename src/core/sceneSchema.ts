@@ -28,6 +28,7 @@ const wallSchema = z.object({
   kind: z.enum(['bearing', 'exterior', 'partition', 'low']),
   height: positiveMeasure,
   color: HexColorSchema.optional(),
+  renovation: z.enum(['new', 'demolished']).optional(),
 }).strict().superRefine((wall, ctx) => {
   if (wall.x0 >= wall.x1 || wall.y0 >= wall.y1) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Wall bounds must have positive width and height' });

@@ -11,6 +11,7 @@ import { pointInPoly } from '@/core/geometry';
 import { formatSceneIssues, SceneDocumentSchema } from '@/core/sceneSchema';
 import { instanceRef, type SceneDocument } from '@/core/types';
 import { documentAssets, documentMaterials } from '@/core/sceneResources';
+import { wallStatusLabel } from '@/core/renovation';
 import { getChatProviderConfig, type AiProviderConfig } from '@/lib/aiProvider';
 import { z } from 'zod';
 
@@ -28,7 +29,7 @@ function packContext(doc: SceneDocument): string {
   const lines: string[] = [];
   for (const level of doc.levels) {
     lines.push(`【楼层 ${level.name}，levelId=${level.id}】`);
-    lines.push(`墙体：${level.walls.map((wall) => `${wall.kind}（wallId=${wall.id}）`).join('、') || '无'}`);
+    lines.push(`墙体：${level.walls.map((wall) => `${wall.kind}/${wallStatusLabel(wall)}（wallId=${wall.id}，${wall.x0},${wall.y0}-${wall.x1},${wall.y1}）`).join('、') || '无'}`);
     for (const r of level.rooms) {
       const instances = level.instances
         .filter((i) => pointInPoly([i.t.x, i.t.y], r.poly))
@@ -60,7 +61,8 @@ const SYSTEM_PROMPT = `你是 ZaoKing 室内设计助手，通过调用工具函
 4. 结构参数只可修改上下文明确列出的资产参数；不支持的参数不要猜。
 5. 添加组件的位置由系统求解。用户一句话包含多个意图时可调用多个工具。
 6. 墙面换色使用 set_wall_color，地面材料使用 set_floor_material；不要把墙面指令误作地面指令。
-7. 信息不足或操作有歧义时调用 ask_user；工具调用完成后简短总结，不要编造操作。`;
+7. 拆改只使用 set_wall_renovation，并且必须使用上下文给出的 wallId；承重墙或外墙拆除必须提醒现场专业核验与审批，不能将模型标记描述为施工许可。
+8. 信息不足或操作有歧义时调用 ask_user；工具调用完成后简短总结，不要编造操作。`;
 
 const TOOLS = [
   {
@@ -193,6 +195,22 @@ const TOOLS = [
         type: 'object',
         properties: { room: { type: 'string' }, levelId: { type: 'string' }, query: { type: 'string', description: '材质名或颜色描述，如"浅灰色地砖"' } },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_wall_renovation',
+      description: '将一段指定墙体标记为保留、新建或拆除，必须使用上下文中提供的 wallId',
+      parameters: {
+        type: 'object',
+        properties: {
+          levelId: { type: 'string' },
+          wallId: { type: 'string' },
+          status: { type: 'string', enum: ['retained', 'new', 'demolished'] },
+        },
+        required: ['wallId', 'status'],
       },
     },
   },

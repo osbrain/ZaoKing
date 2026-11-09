@@ -8,6 +8,17 @@ describe('SceneDocumentSchema', () => {
     expect(SceneDocumentSchema.safeParse(buildSeedDocument()).success).toBe(true);
   });
 
+  it('accepts optional wall renovation states while preserving legacy walls', () => {
+    const document = buildBlankDocument();
+    document.levels[0].walls.push({ id: 'partition-1', x0: 0, y0: 0, x1: 1000, y1: 200, kind: 'partition', height: 2800 });
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+
+    document.levels[0].walls[0].renovation = 'demolished';
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(true);
+    document.levels[0].walls[0].renovation = 'pending' as never;
+    expect(SceneDocumentSchema.safeParse(document).success).toBe(false);
+  });
+
   it('validates optional room-specific flooring parameters while accepting legacy rooms', () => {
     const document = buildBlankDocument();
     document.levels[0].rooms.push({

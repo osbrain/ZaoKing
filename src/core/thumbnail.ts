@@ -9,6 +9,7 @@ import { docBBox } from './geometry';
 import { furnSVG, materialPatternId, openingsSvg, patternsDefs, roomFlooringDefs, roomFlooringPatternId } from './symbols2d';
 import { instanceGeometry, instanceRef, type SceneDocument } from './types';
 import { documentAssets, documentMaterials } from './sceneResources';
+import { openingsForRenovatedLevel, renovationPatternDefs, renovationPatternId } from './renovation';
 
 const WALL_FILL: Record<string, string> = {
   bearing: '#26241f',
@@ -34,7 +35,7 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
     .map((r) => `<polygon points="${r.poly.map((p) => p.join(',')).join(' ')}" fill="url(#${r.flooring ? roomFlooringPatternId(r.id, prefix) : materialPatternId(r.floorMaterialId, prefix)})"/>`)
     .join('');
   const walls = lv.walls
-    .map((wl) => `<rect x="${wl.x0}" y="${wl.y0}" width="${wl.x1 - wl.x0}" height="${wl.y1 - wl.y0}" fill="${wl.color ?? WALL_FILL[wl.kind] ?? '#a7a195'}"/>`)
+    .map((wl) => `<rect x="${wl.x0}" y="${wl.y0}" width="${wl.x1 - wl.x0}" height="${wl.y1 - wl.y0}" fill="${wl.renovation === 'demolished' ? `url(#${renovationPatternId(prefix)})` : wl.renovation === 'new' ? '#dceee4' : wl.color ?? WALL_FILL[wl.kind] ?? '#a7a195'}" stroke="${wl.renovation === 'demolished' ? '#b33f38' : wl.renovation === 'new' ? '#357a56' : 'none'}" stroke-dasharray="${wl.renovation ? '7 4' : 'none'}"/>`)
     .join('');
   const furn = lv.instances
     .slice(0, 500)
@@ -47,11 +48,11 @@ export function planThumbSvg(doc: SceneDocument, prefix = 'th'): string {
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="xMidYMid meet">` +
-    `<defs>${patternsDefs(prefix, materials)}${roomFlooringDefs(lv.rooms, materials, prefix)}</defs>` +
+    `<defs>${patternsDefs(prefix, materials)}${roomFlooringDefs(lv.rooms, materials, prefix)}${renovationPatternDefs(prefix)}</defs>` +
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f7f4ee"/>` +
     rooms +
-    openingsSvg(lv) +
     walls +
+    openingsSvg({ ...lv, openings: openingsForRenovatedLevel(lv) }) +
     furn +
     `</svg>`
   );
