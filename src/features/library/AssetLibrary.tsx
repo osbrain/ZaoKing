@@ -19,6 +19,9 @@ export default function AssetLibrary() {
   const [editor, setEditor] = useState<{ asset?: CustomAsset } | null>(null);
   const doc = useSceneStore(s => s.doc);
   const run = useSceneStore(s => s.run);
+  const planLayer = useEditorStore(s => s.planLayer);
+  const viewMode = useEditorStore(s => s.viewMode);
+  const canPlaceAssets = viewMode !== '2d' || planLayer === 'layout';
   const assets = useMemo(() => doc ? documentAssets(doc) : undefined, [doc?.assets, doc?.assetSnapshots]);
   const catalog = useMemo(() => assetCatalog(assets), [assets]);
   const projectAssetIds = useMemo(() => new Set(assets?.map(asset => asset.id) ?? []), [assets]);
@@ -42,6 +45,10 @@ export default function AssetLibrary() {
     const projectAssets = documentAssets(document);
     const level = document.levels[0];
     const ed = useEditorStore.getState();
+    if (ed.viewMode === '2d' && ed.planLayer !== 'layout') {
+      ed.showToast('切换到「布置」图层后才能放置组件');
+      return;
+    }
     const selection = ed.selection;
     const room = selection?.kind === 'room' ? level.rooms.find(candidate => candidate.id === selection.id) : resolveRoom(level);
     if (!room) { ed.showToast('请先使用「房间」工具绘制可放置的地面'); return; }
@@ -76,7 +83,9 @@ export default function AssetLibrary() {
         <select aria-label="组件分类" value={category} onChange={event => setCategory(event.target.value)} className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs">
           <option value="all">全部分类</option>{categories.map(cat => <option key={cat}>{cat}</option>)}
         </select>
-        <p className="text-[11px] leading-relaxed text-zinc-400">点击放入选中房间，默认最大房间；自动寻找空位，放置后可拖动和旋转。</p>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          {canPlaceAssets ? '点击放入选中房间，默认最大房间；自动寻找空位，放置后可拖动和旋转。' : '铺装图层中可选择房间并调整地面；切换到布置图层后可放置组件。'}
+        </p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
         {!groups.length && <div className="space-y-3 px-3 py-8 text-center">
@@ -90,7 +99,7 @@ export default function AssetLibrary() {
               const custom = doc?.assets?.find(candidate => candidate.id === asset.id);
               const used = usage.get(asset.id) ?? 0;
               return <div key={asset.id} className="overflow-hidden rounded-lg border border-zinc-200 bg-white transition hover:border-accent hover:shadow-sm">
-                <button onClick={() => addAsset(asset)} className="flex w-full flex-col items-center p-2 text-center" title={`放置 ${asset.name} · ${asset.w}×${asset.d}×${asset.h} mm`}>
+                <button onClick={() => addAsset(asset)} disabled={!canPlaceAssets} className="flex w-full flex-col items-center p-2 text-center disabled:cursor-not-allowed disabled:opacity-45" title={canPlaceAssets ? `放置 ${asset.name} · ${asset.w}×${asset.d}×${asset.h} mm` : '请切换到布置图层放置组件'}>
                   <svg viewBox={`${-asset.w / 2 - 80} ${-asset.d / 2 - 80} ${asset.w + 160} ${asset.d + 160}`} className="h-12 w-full" aria-hidden="true">
                     <g dangerouslySetInnerHTML={{ __html: furnSVG(asset.type, asset.w, asset.d, asset.color, asset.geometry) }} />
                   </svg>

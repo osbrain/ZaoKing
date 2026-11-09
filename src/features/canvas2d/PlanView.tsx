@@ -28,6 +28,7 @@ export default function PlanView() {
   const setCamera = useEditorStore((s) => s.setCamera);
   const selection = useEditorStore((s) => s.selection);
   const select = useEditorStore((s) => s.select);
+  const planLayer = useEditorStore((s) => s.planLayer);
   const setCursor = useEditorStore((s) => s.setCursor);
   const tool = useEditorStore((s) => s.tool);
   const wallPreset = useEditorStore((s) => s.wallPreset);
@@ -100,6 +101,7 @@ export default function PlanView() {
   /* ---------- 选择模式：家具拖拽 ---------- */
   const startDrag = useCallback(
     (inst: ComponentInstance, e: React.PointerEvent) => {
+      if (useEditorStore.getState().planLayer !== 'layout') return;
       if (e.button !== 0) return;
       e.stopPropagation();
       select({ kind: 'furn', id: inst.id });
@@ -238,6 +240,7 @@ export default function PlanView() {
   const onSvgDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
+      if (planLayer === 'floor' && tool !== 'select') return;
       if (tool === 'select') {
         // 空白处：拖拽平移 / 点按取消选择
         const start = { x: e.clientX, y: e.clientY, cam: { ...useEditorStore.getState().camera } };
@@ -323,12 +326,13 @@ export default function PlanView() {
       }
       run(tool === 'door' ? '开门' : '开窗', [{ type: 'addOpening', opening: { ...o, id: uid('o') } }]);
     },
-    [level, run, select, setCamera, showToast, toWorld, tool, wallPreset],
+    [level, planLayer, run, select, setCamera, showToast, toWorld, tool, wallPreset],
   );
 
   const onSvgMove = useCallback(
     (e: React.PointerEvent) => {
       if (!level) return;
+      if (planLayer === 'floor' && tool !== 'select') return;
       if (tool === 'select') {
         const w = toWorld(e.clientX, e.clientY);
         setCursor({ x: Math.round(w.x / 10) * 10, y: Math.round(w.y / 10) * 10 });
@@ -340,7 +344,7 @@ export default function PlanView() {
         setOpeningPreview(wall ? openingOnWall(wall, [w.x, w.y], tool) : null);
       }
     },
-    [level, setCursor, toWorld, tool],
+    [level, planLayer, setCursor, toWorld, tool],
   );
 
   const onSvgLeave = useCallback(() => {
@@ -368,6 +372,7 @@ export default function PlanView() {
   const vh = size.h / camera.scale;
   const vb = `${camera.cx - vw / 2} ${camera.cy - vh / 2} ${vw} ${vh}`;
   const selecting = tool === 'select';
+  const layoutLayer = planLayer === 'layout';
   const blankPlan = level.walls.length === 0 && level.rooms.length === 0;
 
   const TOOL_HINTS: Record<Tool, string> = {
@@ -394,10 +399,10 @@ export default function PlanView() {
         <defs dangerouslySetInnerHTML={{ __html: patternsDefs('', materials) }} />
         {showGrid && <rect x={camera.cx - vw / 2} y={camera.cy - vh / 2} width={vw} height={vh} fill="url(#p-grid)" pointerEvents="none" />}
         <RoomsLayer level={level} selection={selection} onSelect={select} interactive={selecting} />
-        <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting} />
+        <WallsLayer level={level} wallEdit={wallEdit} selection={selection} onWallDown={startWallDrag} interactive={selecting && layoutLayer} />
         <g dangerouslySetInnerHTML={{ __html: openingsSvg(level) }} pointerEvents="none" />
-        <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting} />
-        {showFurniture && <FurnLayer assets={assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />}
+        <OpeningOverlay level={level} wallEdit={wallEdit} selection={selection} onSelect={select} interactive={selecting && layoutLayer} />
+        {layoutLayer && showFurniture && <FurnLayer assets={assets} level={level} drag={drag} onDown={startDrag} interactive={selecting} />}
         {showRoomNames && <LabelsLayer level={level} materials={materials} />}
         <g dangerouslySetInnerHTML={{ __html: dimsSvg(level) }} pointerEvents="none" />
         {/* 绘制预览 */}
@@ -431,9 +436,23 @@ export default function PlanView() {
           />
         )}
         <g data-export-ignore="true">
-          {(showFurniture || selection?.kind !== 'furn') && <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />}
+          {(layoutLayer || selection?.kind === 'room') && (showFurniture || selection?.kind !== 'furn') &&
+            <SelLayer assets={assets} level={level} selection={selection} drag={drag} scale={camera.scale} wallEdit={wallEdit} onRotate={startRotate} onWallResize={startWallResize} />}
         </g>
       </svg>
+
+      <div role="group" aria-label="设计图层" className="absolute left-1/2 top-3 flex -translate-x-1/2 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+        {([
+          ['layout', '布置'],
+          ['floor', '铺装'],
+        ] as const).map(([layer, label]) => (
+          <button key={layer} type="button" aria-pressed={planLayer === layer}
+            onClick={() => useEditorStore.getState().setPlanLayer(layer)}
+            className={`px-3 py-1.5 text-xs font-medium transition ${planLayer === layer ? 'bg-ink text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* 工具条 */}
       <div className="absolute left-3 top-3 flex flex-col gap-0.5 rounded-xl border border-zinc-200 bg-white p-1 shadow-sm">
@@ -448,8 +467,9 @@ export default function PlanView() {
         ).map(([t, label, key]) => (
           <button
             key={t}
+            disabled={!layoutLayer && t !== 'select'}
             onClick={() => useEditorStore.getState().setTool(t)}
-            className={`flex w-20 items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition ${
+            className={`flex w-20 items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition disabled:cursor-not-allowed disabled:opacity-35 ${
               tool === t ? 'bg-ink text-white' : 'text-zinc-600 hover:bg-zinc-100'
             }`}
             title={`${label} (${key})`}
@@ -486,10 +506,10 @@ export default function PlanView() {
             className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showRoomNames ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
             房间名称 {showRoomNames ? '开' : '关'}
           </button>
-          <button type="button" aria-pressed={showFurniture} onClick={() => useEditorStore.getState().toggleFurniture()}
+          {layoutLayer && <button type="button" aria-pressed={showFurniture} onClick={() => useEditorStore.getState().toggleFurniture()}
             className={`rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${showFurniture ? 'bg-accent-soft text-accent' : 'text-zinc-500 hover:bg-zinc-100'}`}>
             家具组件 {showFurniture ? '开' : '关'}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -507,7 +527,9 @@ export default function PlanView() {
         <button className="h-8 w-8 border-t border-zinc-100 text-lg leading-none hover:bg-zinc-50" onClick={() => zoomBy(0.8)} title="缩小">−</button>
         <button className="h-8 w-8 border-t border-zinc-100 text-xs hover:bg-zinc-50" onClick={fit} title="适应窗口">适</button>
       </div>
-      <p className="pointer-events-none absolute bottom-3 right-3 text-xs text-zinc-400">{TOOL_HINTS[tool]}</p>
+      <p className="pointer-events-none absolute bottom-3 right-3 text-xs text-zinc-400">
+        {planLayer === 'floor' ? '选择房间以调整地面材质和单价 · 滚轮缩放' : TOOL_HINTS[tool]}
+      </p>
 
       {blankPlan && (
         <div className="pointer-events-none absolute left-1/2 top-14 w-fit -translate-x-1/2 rounded-xl border border-zinc-200 bg-white/95 px-5 py-3 text-xs leading-relaxed text-zinc-500 shadow-sm">

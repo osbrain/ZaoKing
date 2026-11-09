@@ -31,6 +31,7 @@ Inspect room structure, furniture placement, materials, and spatial checks in a 
 ## What You Can Do
 
 - **Create and edit floor plans.** Work with rooms, walls, doors, windows, openings, dimensions, a toggleable grid, and orientation indicators.
+- **Switch between layout and floor-finish layers.** Select rooms to edit their floor material and project price; floor mode hides furniture and disables furniture placement and structural drawing tools while keeping the plan context visible.
 - **Control the canvas display.** Toggle room labels and furniture visibility in both 2D and 3D views.
 - **Move between 2D and 3D.** Edit a plan and inspect the corresponding room layout in a 3D scene backed by the same design data.
 - **Arrange and customize furniture.** Add catalog components, place and rotate them, adjust width, depth, and height, and edit supported component parameters.

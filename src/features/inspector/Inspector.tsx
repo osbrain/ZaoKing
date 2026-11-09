@@ -104,8 +104,11 @@ export function PropsPanel() {
   const selection = useEditorStore((s) => s.selection);
   const select = useEditorStore((s) => s.select);
   const showToast = useEditorStore((s) => s.showToast);
+  const planLayer = useEditorStore((s) => s.planLayer);
+  const viewMode = useEditorStore((s) => s.viewMode);
 
   if (!doc) return null;
+  const floorEditing = viewMode === '2d' && planLayer === 'floor';
   const assets = documentAssets(doc);
   const materials = materialCatalog(documentMaterials(doc));
   const level = doc.levels[0];
@@ -215,7 +218,7 @@ export function PropsPanel() {
             <p className="text-[11px] text-zinc-400">地面估价（含 5% 损耗）</p>
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
+        {!floorEditing && <label className="flex flex-col gap-1 text-[11px] text-zinc-500">
           房间名称
           <input
             defaultValue={room.name}
@@ -225,7 +228,7 @@ export function PropsPanel() {
             }}
             className="rounded-md border border-zinc-200 px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
           />
-        </label>
+        </label>}
         <div>
           <p className="mb-1.5 text-[11px] text-zinc-500">地面材质</p>
           <div className="grid grid-cols-2 gap-1.5">
@@ -249,7 +252,7 @@ export function PropsPanel() {
         <MoneyField label="项目单价（元/m²）" value={mat.price} max={MAX_MATERIAL_PRICE_PER_SQM}
           hint="此价格应用到项目中所有使用该材质的房间。"
           onCommit={(price) => { if (price !== undefined) run('调整材质单价', [{ type: 'setMaterialPrice', materialId: mat.id, price }]); }} />
-        <button
+        {!floorEditing && <button
           className="w-full rounded-md border border-red-200 py-1.5 text-xs text-red-600 hover:bg-red-50"
           onClick={() => {
             run('删除房间', [{ type: 'deleteRoom', id: room.id }]);
@@ -258,7 +261,7 @@ export function PropsPanel() {
           }}
         >
           删除房间地面
-        </button>
+        </button>}
       </div>
     );
   }

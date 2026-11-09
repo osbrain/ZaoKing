@@ -12,11 +12,13 @@ export type Selection =
 
 export type Tool = 'select' | 'wall' | 'room' | 'door' | 'window';
 export type WallPreset = 'exterior' | 'partition' | 'low';
+export type PlanLayer = 'layout' | 'floor';
 
 export type Camera = { cx: number; cy: number; scale: number };
 
 interface EditorState {
   viewMode: '2d' | '3d';
+  planLayer: PlanLayer;
   camera: Camera;
   selection: Selection;
   tool: Tool;
@@ -31,6 +33,7 @@ interface EditorState {
   showFurniture: boolean;
 
   setViewMode: (m: '2d' | '3d') => void;
+  setPlanLayer: (layer: PlanLayer) => void;
   setCamera: (c: Camera) => void;
   select: (s: Selection) => void;
   setTool: (t: Tool) => void;
@@ -47,6 +50,7 @@ interface EditorState {
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   viewMode: '2d',
+  planLayer: 'layout',
   camera: { cx: 5000, cy: 5000, scale: 0.06 },
   selection: null,
   tool: 'select',
@@ -60,13 +64,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   showRoomNames: true,
   showFurniture: true,
 
-  setViewMode: (m) => set({ viewMode: m }),
+  setViewMode: (m) => set((state) => ({
+    viewMode: m,
+    selection: m === '2d' && state.planLayer === 'floor' && state.selection?.kind !== 'room'
+      ? null
+      : state.selection,
+  })),
+  setPlanLayer: (planLayer) => set((state) => ({
+    planLayer,
+    tool: 'select',
+    selection: planLayer === 'floor' && state.selection?.kind !== 'room' ? null : state.selection,
+  })),
   setCamera: (c) => set({ camera: c }),
   select: (s) => {
+    const state = get();
+    if (state.viewMode === '2d' && state.planLayer === 'floor' && s && s.kind !== 'room') return;
     set({ selection: s });
     if (s) set({ rightTab: 'props' });
   },
-  setTool: (t) => set({ tool: t }),
+  setTool: (t) => set((state) => ({
+    tool: state.viewMode === '2d' && state.planLayer === 'floor' && t !== 'select' ? 'select' : t,
+  })),
   setWallPreset: (p) => set({ wallPreset: p }),
   setCursor: (c) => set({ cursor: c }),
   setRightTab: (t) => set({ rightTab: t }),
